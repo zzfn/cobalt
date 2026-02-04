@@ -174,23 +174,36 @@ pub fn write_api_profiles(profiles: ApiKeyProfiles) -> Result<(), String> {
 pub fn update_env_vars(updates: std::collections::HashMap<String, String>) -> Result<(), String> {
     let settings_path = get_claude_dir()?.join("settings.json");
 
-    // 读取现有配置
-    let mut settings = if settings_path.exists() {
+    // 读取现有配置为 Value，保留所有字段
+    let mut settings_value: serde_json::Value = if settings_path.exists() {
         let content = fs::read_to_string(&settings_path)
             .map_err(|e| format!("读取 settings.json 失败: {}", e))?;
-        serde_json::from_str::<ClaudeSettings>(&content)
+        serde_json::from_str(&content)
             .map_err(|e| format!("解析 settings.json 失败: {}", e))?
     } else {
-        ClaudeSettings::default()
+        serde_json::json!({
+            "permissions": {
+                "allow": [],
+                "deny": []
+            },
+            "env": {}
+        })
     };
 
+    // 确保 env 对象存在
+    if settings_value.get("env").is_none() {
+        settings_value["env"] = serde_json::json!({});
+    }
+
     // 只更新指定的环境变量
-    for (key, value) in updates {
-        settings.env.insert(key, value);
+    if let Some(env) = settings_value.get_mut("env").and_then(|v| v.as_object_mut()) {
+        for (key, value) in updates {
+            env.insert(key, serde_json::Value::String(value));
+        }
     }
 
     // 写回配置
-    let content = serde_json::to_string_pretty(&settings)
+    let content = serde_json::to_string_pretty(&settings_value)
         .map_err(|e| format!("序列化 settings 失败: {}", e))?;
 
     fs::write(&settings_path, content).map_err(|e| format!("写入 settings.json 失败: {}", e))
@@ -218,6 +231,41 @@ pub fn switch_api_profile(profile_id: String) -> Result<(), String> {
 
     // 更新 active profile
     profiles.active_profile_id = Some(profile_id);
+    write_api_profiles(profiles)?;
+
+    Ok(())
+}
+
+/// 清除 API 配置（使用官方默认）
+#[tauri::command]
+pub fn clear_api_config() -> Result<(), String> {
+    let settings_path = get_claude_dir()?.join("settings.json");
+
+    // 读取现有配置为 Value，保留所有字段
+    let mut settings_value: serde_json::Value = if settings_path.exists() {
+        let content = fs::read_to_string(&settings_path)
+            .map_err(|e| format!("读取 settings.json 失败: {}", e))?;
+        serde_json::from_str(&content)
+            .map_err(|e| format!("解析 settings.json 失败: {}", e))?
+    } else {
+        return Ok(());
+    };
+
+    // 从 env 中移除 API 相关环境变量
+    if let Some(env) = settings_value.get_mut("env").and_then(|v| v.as_object_mut()) {
+        env.remove("ANTHROPIC_AUTH_TOKEN");
+        env.remove("ANTHROPIC_BASE_URL");
+    }
+
+    // 写回配置
+    let content = serde_json::to_string_pretty(&settings_value)
+        .map_err(|e| format!("序列化 settings 失败: {}", e))?;
+
+    fs::write(&settings_path, content).map_err(|e| format!("写入 settings.json 失败: {}", e))?;
+
+    // 清除 active profile
+    let mut profiles = read_api_profiles()?;
+    profiles.active_profile_id = None;
     write_api_profiles(profiles)?;
 
     Ok(())
