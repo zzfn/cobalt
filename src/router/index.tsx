@@ -3,6 +3,7 @@ import Layout from '@/components/layout/Layout';
 import Dashboard from '@/pages/Dashboard';
 import GeneralSettings from '@/pages/Settings/General';
 import InstructionsSettings from '@/pages/Settings/Instructions';
+import ClaudeCodeSettings from '@/pages/Settings/ClaudeCode';
 import SkillsList from '@/pages/Skills/List';
 import SkillDetail from '@/pages/Skills/Detail';
 
@@ -33,6 +34,10 @@ export const router = createBrowserRouter([
           {
             path: 'instructions',
             element: <InstructionsSettings />,
+          },
+          {
+            path: 'claude-code',
+            element: <ClaudeCodeSettings />,
           },
         ],
       },

@@ -1,6 +1,6 @@
 // 配置服务 - 封装 Tauri 后端调用
 import { invoke } from '@tauri-apps/api/core';
-import type { ClaudeCodeSettings } from '@/types/settings';
+import type { ClaudeCodeSettings, ApiKeyProfile } from '@/types/settings';
 
 // 后端返回的设置类型
 interface BackendSettings {
@@ -16,6 +16,12 @@ interface BackendSettings {
 export interface BackupInfo {
   path: string;
   timestamp: string;
+}
+
+// API Key 配置档案列表
+export interface ApiKeyProfiles {
+  profiles: ApiKeyProfile[];
+  activeProfileId: string | null;
 }
 
 /**
@@ -63,4 +69,25 @@ export async function writeClaudeMd(content: string): Promise<void> {
  */
 export async function backupConfig(): Promise<BackupInfo> {
   return invoke<BackupInfo>('backup_config');
+}
+
+/**
+ * 读取 API Key 配置档案
+ */
+export async function readApiProfiles(): Promise<ApiKeyProfiles> {
+  return invoke<ApiKeyProfiles>('read_api_profiles');
+}
+
+/**
+ * 写入 API Key 配置档案
+ */
+export async function writeApiProfiles(profiles: ApiKeyProfiles): Promise<void> {
+  await invoke('write_api_profiles', { profiles });
+}
+
+/**
+ * 切换 API Key 配置档案
+ */
+export async function switchApiProfile(profileId: string): Promise<void> {
+  await invoke('switch_api_profile', { profileId });
 }

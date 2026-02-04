@@ -125,3 +125,75 @@ pub fn backup_config() -> Result<BackupInfo, String> {
         timestamp,
     })
 }
+
+/// API Key 配置档案
+#[derive(Debug, Serialize, Deserialize, Clone)]
+#[serde(rename_all = "camelCase")]
+pub struct ApiKeyProfile {
+    pub id: String,
+    pub name: String,
+    pub api_key: String,
+    pub base_url: String,
+    pub created_at: String,
+}
+
+/// API Key 配置档案列表
+#[derive(Debug, Serialize, Deserialize, Default)]
+#[serde(rename_all = "camelCase")]
+pub struct ApiKeyProfiles {
+    pub profiles: Vec<ApiKeyProfile>,
+    pub active_profile_id: Option<String>,
+}
+
+/// 读取 API Key 配置档案
+#[tauri::command]
+pub fn read_api_profiles() -> Result<ApiKeyProfiles, String> {
+    let profiles_path = get_claude_dir()?.join("api-profiles.json");
+
+    if !profiles_path.exists() {
+        return Ok(ApiKeyProfiles::default());
+    }
+
+    let content = fs::read_to_string(&profiles_path)
+        .map_err(|e| format!("读取 api-profiles.json 失败: {}", e))?;
+
+    serde_json::from_str(&content).map_err(|e| format!("解析 api-profiles.json 失败: {}", e))
+}
+
+/// 写入 API Key 配置档案
+#[tauri::command]
+pub fn write_api_profiles(profiles: ApiKeyProfiles) -> Result<(), String> {
+    let profiles_path = get_claude_dir()?.join("api-profiles.json");
+
+    let content = serde_json::to_string_pretty(&profiles)
+        .map_err(|e| format!("序列化 profiles 失败: {}", e))?;
+
+    fs::write(&profiles_path, content).map_err(|e| format!("写入 api-profiles.json 失败: {}", e))
+}
+
+/// 切换 API Key 配置档案
+#[tauri::command]
+pub fn switch_api_profile(profile_id: String) -> Result<(), String> {
+    // 读取 profiles
+    let mut profiles = read_api_profiles()?;
+
+    // 查找目标 profile
+    let profile = profiles
+        .profiles
+        .iter()
+        .find(|p| p.id == profile_id)
+        .ok_or_else(|| format!("未找到配置档案: {}", profile_id))?
+        .clone();
+
+    // 更新 settings.json 的 env 字段
+    let mut settings = read_settings()?;
+    settings.env.insert("ANTHROPIC_AUTH_TOKEN".to_string(), profile.api_key);
+    settings.env.insert("ANTHROPIC_BASE_URL".to_string(), profile.base_url);
+    write_settings(settings)?;
+
+    // 更新 active profile
+    profiles.active_profile_id = Some(profile_id);
+    write_api_profiles(profiles)?;
+
+    Ok(())
+}

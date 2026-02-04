@@ -4,7 +4,7 @@ mod commands;
 use commands::{
     // 配置命令
     backup_config, get_claude_config_dir, read_claude_md, read_settings, write_claude_md,
-    write_settings,
+    write_settings, read_api_profiles, write_api_profiles, switch_api_profile,
     // Skills 命令
     list_installed_skills, list_skill_files, read_skill_md, read_skill_registry, toggle_skill,
     uninstall_skill, write_skill_registry,
@@ -22,6 +22,9 @@ pub fn run() {
             read_claude_md,
             write_claude_md,
             backup_config,
+            read_api_profiles,
+            write_api_profiles,
+            switch_api_profile,
             // Skills 命令
             read_skill_registry,
             write_skill_registry,

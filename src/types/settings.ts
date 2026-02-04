@@ -57,6 +57,17 @@ export interface ConfigBackup {
 }
 
 /**
+ * API Key 配置档案
+ */
+export interface ApiKeyProfile {
+  id: string;
+  name: string;
+  apiKey: string;
+  baseUrl: string;
+  createdAt: string;
+}
+
+/**
  * 默认设置
  */
 export const defaultSettings: ClaudeSettings = {

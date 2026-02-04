@@ -9,6 +9,7 @@ import {
   ChevronRight,
   Sun,
   Moon,
+  Terminal,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
@@ -42,6 +43,11 @@ const navItems: NavItem[] = [
         title: '全局指令',
         href: '/settings/instructions',
         icon: FileText,
+      },
+      {
+        title: 'Claude Code',
+        href: '/settings/claude-code',
+        icon: Terminal,
       },
     ],
   },
