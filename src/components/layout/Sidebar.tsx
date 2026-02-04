@@ -10,6 +10,7 @@ import {
   Sun,
   Moon,
   Terminal,
+  FileJson,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
@@ -48,6 +49,11 @@ const navItems: NavItem[] = [
         title: 'Claude Code',
         href: '/settings/claude-code',
         icon: Terminal,
+      },
+      {
+        title: 'settings.json',
+        href: '/settings/settings-json',
+        icon: FileJson,
       },
     ],
   },
