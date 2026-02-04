@@ -1,4 +1,4 @@
-.PHONY: help install dev build clean release tag-release build-macos build-universal
+.PHONY: help install dev build clean release tag-release build-macos build-universal version
 
 # 默认目标
 help:
@@ -9,7 +9,8 @@ help:
 	@echo "  make build-macos      - 构建 macOS 应用（当前架构）"
 	@echo "  make build-universal  - 构建 macOS Universal Binary"
 	@echo "  make clean            - 清理构建产物"
-	@echo "  make tag-release      - 创建并推送 release tag (VERSION=x.x.x)"
+	@echo "  make version          - 更新所有配置文件版本号 (VERSION=x.x.x)"
+	@echo "  make tag-release      - 更新版本号、创建并推送 release tag (VERSION=x.x.x)"
 	@echo "  make release          - 本地完整发布流程"
 
 # 安装依赖
@@ -46,17 +47,35 @@ clean:
 	rm -rf src-tauri/target
 	rm -rf node_modules/.vite
 
-# 创建并推送 release tag
-tag-release:
+# 更新所有配置文件的版本号
+version:
 	@if [ -z "$(VERSION)" ]; then \
-		echo "错误: 请指定版本号，例如: make tag-release VERSION=0.1.0"; \
+		echo "错误: 请指定版本号，例如: make version VERSION=0.2.0"; \
 		exit 1; \
 	fi
+	@echo "更新版本号到 $(VERSION)..."
+	@# 更新 package.json
+	@sed -i '' 's/"version": "[^"]*"/"version": "$(VERSION)"/' package.json
+	@# 更新 Cargo.toml
+	@sed -i '' 's/^version = "[^"]*"/version = "$(VERSION)"/' src-tauri/Cargo.toml
+	@# 更新 tauri.conf.json
+	@sed -i '' 's/"version": "[^"]*"/"version": "$(VERSION)"/' src-tauri/tauri.conf.json
+	@echo "✓ 版本号已更新到 $(VERSION)"
+	@echo "  - package.json"
+	@echo "  - src-tauri/Cargo.toml"
+	@echo "  - src-tauri/tauri.conf.json"
+
+# 创建并推送 release tag
+tag-release: version
+	@echo "提交版本更新..."
+	git add package.json src-tauri/Cargo.toml src-tauri/tauri.conf.json
+	git commit -m "chore: bump version to $(VERSION)"
 	@echo "创建 tag v$(VERSION)..."
 	git tag -a v$(VERSION) -m "Release v$(VERSION)"
-	@echo "推送 tag 到远程仓库..."
+	@echo "推送到远程仓库..."
+	git push origin main
 	git push origin v$(VERSION)
-	@echo "✓ Tag v$(VERSION) 已创建并推送"
+	@echo "✓ 版本 $(VERSION) 已发布"
 	@echo "GitHub Action 将自动开始构建发布版本"
 
 # 本地完整发布流程
