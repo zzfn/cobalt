@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { Key, Plus, Trash2, Check, Pencil, Globe, Copy } from 'lucide-react';
+import { toast } from 'sonner';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -24,6 +25,7 @@ interface ApiKeyCardProps {
   onApiKeyChange: (value: string) => void;
   onBaseUrlChange: (value: string) => void;
   onSwitchProfile: (profileId: string) => void;
+  onSaveProfiles: (profiles: ApiKeyProfile[], activeProfileId: string | null) => Promise<void>;
 }
 
 export default function ApiKeyCard({
@@ -36,6 +38,7 @@ export default function ApiKeyCard({
   onApiKeyChange,
   onBaseUrlChange,
   onSwitchProfile,
+  onSaveProfiles,
 }: ApiKeyCardProps) {
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editingProfile, setEditingProfile] = useState<ApiKeyProfile | null>(null);
@@ -43,6 +46,7 @@ export default function ApiKeyCard({
   const [profileApiKey, setProfileApiKey] = useState('');
   const [profileBaseUrl, setProfileBaseUrl] = useState('');
   const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
+  const [saving, setSaving] = useState(false);
 
   // 遮蔽 API Key 显示
   const maskApiKey = (key: string) => {
@@ -79,39 +83,66 @@ export default function ApiKeyCard({
     setDialogOpen(true);
   };
 
-  const handleSaveProfile = () => {
+  const handleSaveProfile = async () => {
     if (!profileName.trim()) return;
 
-    if (editingProfile) {
-      const updatedProfiles = profiles.map((p) =>
-        p.id === editingProfile.id
-          ? { ...p, name: profileName.trim(), apiKey: profileApiKey, baseUrl: profileBaseUrl }
-          : p
-      );
-      onProfilesChange(updatedProfiles);
-    } else {
-      const newProfile: ApiKeyProfile = {
-        id: crypto.randomUUID(),
-        name: profileName.trim(),
-        apiKey: profileApiKey,
-        baseUrl: profileBaseUrl,
-        createdAt: new Date().toISOString(),
-      };
-      onProfilesChange([...profiles, newProfile]);
-    }
+    setSaving(true);
+    try {
+      let updatedProfiles: ApiKeyProfile[];
 
-    setDialogOpen(false);
+      if (editingProfile) {
+        updatedProfiles = profiles.map((p) =>
+          p.id === editingProfile.id
+            ? { ...p, name: profileName.trim(), apiKey: profileApiKey, baseUrl: profileBaseUrl }
+            : p
+        );
+      } else {
+        const newProfile: ApiKeyProfile = {
+          id: crypto.randomUUID(),
+          name: profileName.trim(),
+          apiKey: profileApiKey,
+          baseUrl: profileBaseUrl,
+          createdAt: new Date().toISOString(),
+        };
+        updatedProfiles = [...profiles, newProfile];
+      }
+
+      // 立即保存到后端
+      await onSaveProfiles(updatedProfiles, activeProfileId);
+      onProfilesChange(updatedProfiles);
+
+      toast.success(editingProfile ? '档案已更新' : '档案已创建');
+      setDialogOpen(false);
+    } catch (error) {
+      toast.error(editingProfile ? '更新档案失败' : '创建档案失败', {
+        description: String(error),
+      });
+    } finally {
+      setSaving(false);
+    }
   };
 
-  const handleDeleteProfile = (e: React.MouseEvent, profileId: string) => {
+  const handleDeleteProfile = async (e: React.MouseEvent, profileId: string) => {
     e.stopPropagation();
     if (deleteConfirmId === profileId) {
-      const updatedProfiles = profiles.filter((p) => p.id !== profileId);
-      onProfilesChange(updatedProfiles);
-      if (activeProfileId === profileId) {
-        onActiveProfileChange(null);
+      try {
+        const updatedProfiles = profiles.filter((p) => p.id !== profileId);
+        const newActiveProfileId = activeProfileId === profileId ? null : activeProfileId;
+
+        // 立即保存到后端
+        await onSaveProfiles(updatedProfiles, newActiveProfileId);
+        onProfilesChange(updatedProfiles);
+        if (activeProfileId === profileId) {
+          onActiveProfileChange(null);
+        }
+
+        toast.success('档案已删除');
+        setDeleteConfirmId(null);
+      } catch (error) {
+        toast.error('删除档案失败', {
+          description: String(error),
+        });
       }
-      setDeleteConfirmId(null);
     } else {
       setDeleteConfirmId(profileId);
       // 3秒后重置确认状态
@@ -125,16 +156,28 @@ export default function ApiKeyCard({
     }
   };
 
-  const handleDuplicateProfile = (e: React.MouseEvent, profile: ApiKeyProfile) => {
+  const handleDuplicateProfile = async (e: React.MouseEvent, profile: ApiKeyProfile) => {
     e.stopPropagation();
-    const newProfile: ApiKeyProfile = {
-      id: crypto.randomUUID(),
-      name: `${profile.name} (副本)`,
-      apiKey: profile.apiKey,
-      baseUrl: profile.baseUrl,
-      createdAt: new Date().toISOString(),
-    };
-    onProfilesChange([...profiles, newProfile]);
+    try {
+      const newProfile: ApiKeyProfile = {
+        id: crypto.randomUUID(),
+        name: `${profile.name} (副本)`,
+        apiKey: profile.apiKey,
+        baseUrl: profile.baseUrl,
+        createdAt: new Date().toISOString(),
+      };
+      const updatedProfiles = [...profiles, newProfile];
+
+      // 立即保存到后端
+      await onSaveProfiles(updatedProfiles, activeProfileId);
+      onProfilesChange(updatedProfiles);
+
+      toast.success('档案已复制');
+    } catch (error) {
+      toast.error('复制档案失败', {
+        description: String(error),
+      });
+    }
   };
 
   return (
@@ -323,8 +366,8 @@ export default function ApiKeyCard({
             <Button variant="outline" onClick={() => setDialogOpen(false)}>
               取消
             </Button>
-            <Button onClick={handleSaveProfile} disabled={!profileName.trim()}>
-              {editingProfile ? '保存修改' : '创建档案'}
+            <Button onClick={handleSaveProfile} disabled={!profileName.trim() || saving}>
+              {saving ? '保存中...' : editingProfile ? '保存修改' : '创建档案'}
             </Button>
           </DialogFooter>
         </DialogContent>

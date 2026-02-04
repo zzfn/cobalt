@@ -21,7 +21,6 @@ const ENV_BASE_URL = 'ANTHROPIC_BASE_URL';
 export default function ClaudeCodeSettings() {
   const [settings, setSettings] = useState<ClaudeCodeSettings>({
     permissions: { allow: [], deny: [] },
-    apiKeyHelper: '',
     env: {},
   });
   const [profiles, setProfiles] = useState<ApiKeyProfile[]>([]);
@@ -144,6 +143,14 @@ export default function ClaudeCodeSettings() {
     setHasChanges(true);
   };
 
+  // 保存配置档案（立即保存）
+  const handleSaveProfiles = async (
+    newProfiles: ApiKeyProfile[],
+    newActiveProfileId: string | null
+  ) => {
+    await writeApiProfiles({ profiles: newProfiles, activeProfileId: newActiveProfileId });
+  };
+
   if (loading) {
     return (
       <div className="flex items-center justify-center h-64">
@@ -186,6 +193,7 @@ export default function ClaudeCodeSettings() {
         onApiKeyChange={handleApiKeyChange}
         onBaseUrlChange={handleBaseUrlChange}
         onSwitchProfile={handleSwitchProfile}
+        onSaveProfiles={handleSaveProfiles}
       />
 
       {/* 权限管理 */}
