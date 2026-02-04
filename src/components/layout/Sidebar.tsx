@@ -109,9 +109,20 @@ export default function Sidebar() {
       }
     } catch (error) {
       console.error('检查更新失败:', error);
+
+      // 获取更详细的错误信息
+      let errorMessage = '未知错误';
+      if (error instanceof Error) {
+        errorMessage = error.message;
+      } else if (typeof error === 'string') {
+        errorMessage = error;
+      } else if (error && typeof error === 'object') {
+        errorMessage = JSON.stringify(error);
+      }
+
       toast.error('检查更新失败', {
-        description: error instanceof Error ? error.message : '未知错误',
-        duration: 3000,
+        description: errorMessage,
+        duration: 5000,
       });
     } finally {
       setCheckingUpdate(false);
