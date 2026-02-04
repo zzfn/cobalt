@@ -19,13 +19,13 @@ export default function ActivityList({
   loading = false,
 }: ActivityListProps) {
   return (
-    <Card className="h-full">
+    <Card className="flex h-full flex-col">
       <CardHeader className="flex flex-row items-center justify-between pb-2">
         <div className="flex items-center gap-2">
           <History className="h-5 w-5 text-muted-foreground" />
           <div>
-            <CardTitle className="text-base">最近活动</CardTitle>
-            <CardDescription>最近的操作记录</CardDescription>
+            <CardTitle className="text-base">最近对话</CardTitle>
+            <CardDescription>Claude Code 最近的使用记录</CardDescription>
           </div>
         </div>
         {activities.length > 0 && onClear && (
@@ -39,7 +39,7 @@ export default function ActivityList({
           </Button>
         )}
       </CardHeader>
-      <CardContent>
+      <CardContent className="flex-1 overflow-hidden">
         {loading ? (
           <div className="space-y-3">
             {Array.from({ length: 4 }).map((_, i) => (
@@ -59,7 +59,7 @@ export default function ActivityList({
             <p className="text-xs mt-1">执行操作后将显示在这里</p>
           </div>
         ) : (
-          <ScrollArea className="pr-4" style={{ maxHeight }}>
+          <ScrollArea className="h-full pr-4">
             <div className="divide-y">
               {activities.map((activity) => (
                 <ActivityItem key={activity.id} activity={activity} />

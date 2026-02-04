@@ -23,8 +23,8 @@ import {
   dashboardErrorAtom,
 } from '@/store/dashboardAtoms';
 import { skillsListAtom } from '@/store/skillsAtoms';
-import { getDashboardStats, getConfigHealth } from '@/services/config';
-import { getActivities, clearActivities } from '@/lib/activityLogger';
+import { getDashboardStats, getConfigHealth, readConversationHistory } from '@/services/config';
+import { clearActivities } from '@/lib/activityLogger';
 import { listInstalledSkills, toggleSkill } from '@/services/skills';
 
 export default function Dashboard() {
@@ -51,9 +51,9 @@ export default function Dashboard() {
       setHealth(configHealth);
       setSkills(installedSkills);
 
-      // 从 localStorage 加载活动记录
-      const storedActivities = getActivities();
-      setActivities(storedActivities);
+      // 从 Claude Code history.jsonl 加载对话记录
+      const conversationHistory = await readConversationHistory(20);
+      setActivities(conversationHistory);
     } catch (err) {
       const message = err instanceof Error ? err.message : '加载仪表盘数据失败';
       setError(message);

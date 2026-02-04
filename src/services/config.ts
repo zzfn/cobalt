@@ -1,7 +1,7 @@
 // 配置服务 - 封装 Tauri 后端调用
 import { invoke } from '@tauri-apps/api/core';
 import type { ClaudeCodeSettings, ApiKeyProfile } from '@/types/settings';
-import type { DashboardStats, ConfigHealth } from '@/types/dashboard';
+import type { DashboardStats, ConfigHealth, ActivityRecord } from '@/types/dashboard';
 import { listInstalledSkills } from './skills';
 
 // 后端返回的设置类型
@@ -174,4 +174,34 @@ export async function getConfigHealth(): Promise<ConfigHealth> {
       : 'healthy';
 
   return { overall, checks };
+}
+
+// 对话记录（后端返回的原始格式）
+interface BackendConversationRecord {
+  id: string;
+  display: string;
+  timestamp: number;
+  project?: string;
+}
+
+/**
+ * 读取对话历史记录
+ * @param limit - 返回的最大记录数
+ * @returns 转换为 ActivityRecord 的对话记录列表
+ */
+export async function readConversationHistory(limit?: number): Promise<ActivityRecord[]> {
+  const records = await invoke<BackendConversationRecord[]>('read_conversation_history', {
+    limit: limit ?? 50,
+  });
+
+  return records.map((record) => ({
+    id: record.id,
+    type: 'conversation' as const,
+    description: record.display.slice(0, 100) + (record.display.length > 100 ? '...' : ''),
+    timestamp: new Date(record.timestamp).toISOString(),
+    metadata: {
+      project: record.project,
+      fullText: record.display,
+    },
+  }));
 }

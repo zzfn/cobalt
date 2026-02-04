@@ -270,3 +270,54 @@ pub fn clear_api_config() -> Result<(), String> {
 
     Ok(())
 }
+
+/// 对话记录
+#[derive(Debug, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ConversationRecord {
+    pub id: String,
+    pub display: String,
+    pub timestamp: i64,
+    pub project: Option<String>,
+}
+
+/// 读取对话历史记录
+#[tauri::command]
+pub fn read_conversation_history(limit: Option<usize>) -> Result<Vec<ConversationRecord>, String> {
+    let history_path = get_claude_dir()?.join("history.jsonl");
+
+    if !history_path.exists() {
+        return Ok(Vec::new());
+    }
+
+    let content = fs::read_to_string(&history_path)
+        .map_err(|e| format!("读取 history.jsonl 失败: {}", e))?;
+
+    let limit = limit.unwrap_or(50);
+    let mut records = Vec::new();
+
+    for (index, line) in content.lines().rev().enumerate() {
+        if index >= limit {
+            break;
+        }
+
+        let line = line.trim();
+        if line.is_empty() {
+            continue;
+        }
+
+        let json_value: serde_json::Value = serde_json::from_str(line)
+            .map_err(|e| format!("解析 history.jsonl 行失败: {}", e))?;
+
+        let record = ConversationRecord {
+            id: format!("conv_{}", index),
+            display: json_value["display"].as_str().unwrap_or("").to_string(),
+            timestamp: json_value["timestamp"].as_i64().unwrap_or(0),
+            project: json_value["project"].as_str().map(|s| s.to_string()),
+        };
+
+        records.push(record);
+    }
+
+    Ok(records)
+}

@@ -1,10 +1,11 @@
 import { cn } from '@/lib/utils';
 import type { ActivityRecord, ActivityType } from '@/types/dashboard';
 import {
-  Sparkles,
-  Key,
-  Settings,
   Archive,
+  Key,
+  MessageSquare,
+  Settings,
+  Sparkles,
   type LucideIcon,
 } from 'lucide-react';
 
@@ -18,6 +19,7 @@ const activityIcons: Record<ActivityType, LucideIcon> = {
   profile_switch: Key,
   settings_update: Settings,
   backup_created: Archive,
+  conversation: MessageSquare,
 };
 
 const activityColors: Record<ActivityType, string> = {
@@ -25,6 +27,7 @@ const activityColors: Record<ActivityType, string> = {
   profile_switch: 'bg-purple-100 text-purple-700 dark:bg-purple-900 dark:text-purple-300',
   settings_update: 'bg-orange-100 text-orange-700 dark:bg-orange-900 dark:text-orange-300',
   backup_created: 'bg-green-100 text-green-700 dark:bg-green-900 dark:text-green-300',
+  conversation: 'bg-indigo-100 text-indigo-700 dark:bg-indigo-900 dark:text-indigo-300',
 };
 
 /**

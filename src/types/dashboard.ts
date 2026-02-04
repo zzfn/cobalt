@@ -24,7 +24,12 @@ export interface DashboardStats {
 /**
  * 活动记录类型
  */
-export type ActivityType = 'skill_toggle' | 'profile_switch' | 'settings_update' | 'backup_created';
+export type ActivityType =
+  | 'skill_toggle'
+  | 'profile_switch'
+  | 'settings_update'
+  | 'backup_created'
+  | 'conversation';
 
 /**
  * 活动记录
