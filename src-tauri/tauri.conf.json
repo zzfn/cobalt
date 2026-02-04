@@ -14,7 +14,10 @@
       {
         "title": "cobalt",
         "width": 800,
-        "height": 600
+        "height": 600,
+        "transparent": false,
+        "decorations": true,
+        "titleBarStyle": "Transparent"
       }
     ],
     "security": {

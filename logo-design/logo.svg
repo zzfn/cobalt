@@ -1,0 +1,55 @@
+<svg width="512" height="512" viewBox="0 0 512 512" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <!-- 蓝色渐变 -->
+    <linearGradient id="blueGradient" x1="256" y1="0" x2="256" y2="512" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#4A9EFF"/>
+      <stop offset="100%" stop-color="#0047AB"/>
+    </linearGradient>
+
+    <!-- 发光效果 -->
+    <filter id="glow">
+      <feGaussianBlur stdDeviation="3" result="coloredBlur"/>
+      <feMerge>
+        <feMergeNode in="coloredBlur"/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+  </defs>
+
+  <!-- 放射状光线 (8条主光线) -->
+  <g opacity="0.9" filter="url(#glow)">
+    <!-- 上 -->
+    <path d="M256 256 L256 40 L246 100 L256 40 L266 100 Z" fill="url(#blueGradient)"/>
+    <!-- 右上 -->
+    <path d="M256 256 L409 103 L370 140 L409 103 L372 142 Z" fill="url(#blueGradient)"/>
+    <!-- 右 -->
+    <path d="M256 256 L472 256 L412 246 L472 256 L412 266 Z" fill="url(#blueGradient)"/>
+    <!-- 右下 -->
+    <path d="M256 256 L409 409 L372 370 L409 409 L370 372 Z" fill="url(#blueGradient)"/>
+    <!-- 下 -->
+    <path d="M256 256 L256 472 L266 412 L256 472 L246 412 Z" fill="url(#blueGradient)"/>
+    <!-- 左下 -->
+    <path d="M256 256 L103 409 L140 372 L103 409 L142 370 Z" fill="url(#blueGradient)"/>
+    <!-- 左 -->
+    <path d="M256 256 L40 256 L100 266 L40 256 L100 246 Z" fill="url(#blueGradient)"/>
+    <!-- 左上 -->
+    <path d="M256 256 L103 103 L142 140 L103 103 L140 142 Z" fill="url(#blueGradient)"/>
+  </g>
+
+  <!-- 次级光线 (4条) -->
+  <g opacity="0.6">
+    <path d="M256 256 L332 70 L310 130 Z" fill="#4A9EFF"/>
+    <path d="M256 256 L442 180 L382 210 Z" fill="#4A9EFF"/>
+    <path d="M256 256 L332 442 L310 382 Z" fill="#4A9EFF"/>
+    <path d="M256 256 L70 332 L130 310 Z" fill="#4A9EFF"/>
+  </g>
+
+  <!-- 中心圆形 -->
+  <circle cx="256" cy="256" r="110" fill="#0047AB" filter="url(#glow)"/>
+  <circle cx="256" cy="256" r="100" fill="url(#blueGradient)"/>
+  <circle cx="256" cy="256" r="70" fill="#4A9EFF"/>
+
+  <!-- 中心高光 -->
+  <circle cx="256" cy="256" r="30" fill="white" opacity="0.9"/>
+  <circle cx="256" cy="256" r="12" fill="white"/>
+</svg>

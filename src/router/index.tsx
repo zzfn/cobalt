@@ -7,6 +7,8 @@ import ClaudeCodeSettings from '@/pages/Settings/ClaudeCode';
 import SettingsJsonEditor from '@/pages/Settings/SettingsJson';
 import SkillsList from '@/pages/Skills/List';
 import SkillDetail from '@/pages/Skills/Detail';
+import { GlassCardExample } from '@/components/examples/GlassCardExample';
+import GlassTest from '@/pages/GlassTest';
 
 export const router = createBrowserRouter([
   {
@@ -59,6 +61,14 @@ export const router = createBrowserRouter([
           },
         ],
       },
+      {
+        path: 'glass-test',
+        element: <GlassTest />,
+      },
     ],
+  },
+  {
+    path: '/glass-demo',
+    element: <GlassCardExample />,
   },
 ]);

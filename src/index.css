@@ -1,5 +1,21 @@
 @import "tailwindcss";
 
+@utility backdrop-blur-sm {
+  backdrop-filter: blur(4px);
+}
+
+@utility backdrop-blur-md {
+  backdrop-filter: blur(12px);
+}
+
+@utility backdrop-blur-lg {
+  backdrop-filter: blur(16px);
+}
+
+@utility backdrop-blur-xl {
+  backdrop-filter: blur(24px);
+}
+
 @theme {
   --color-border: hsl(var(--border));
   --color-input: hsl(var(--input));
@@ -75,6 +91,9 @@
 @layer base {
   * {
     @apply border-border;
+  }
+  html {
+    @apply bg-background;
   }
   body {
     @apply bg-background text-foreground;

@@ -1,0 +1,136 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>液态玻璃效果测试</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      font-family: system-ui, -apple-system, sans-serif;
+      padding: 2rem;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      min-height: 100vh;
+    }
+
+    .container {
+      max-width: 800px;
+      margin: 0 auto;
+    }
+
+    h1 {
+      color: white;
+      margin-bottom: 2rem;
+      text-align: center;
+    }
+
+    .glass-card {
+      background: rgba(255, 255, 255, 0.1);
+      backdrop-filter: blur(10px);
+      -webkit-backdrop-filter: blur(10px);
+      border: 1px solid rgba(255, 255, 255, 0.2);
+      border-radius: 16px;
+      padding: 2rem;
+      margin-bottom: 2rem;
+      color: white;
+    }
+
+    .glass-card h2 {
+      margin-bottom: 1rem;
+    }
+
+    .glass-card p {
+      line-height: 1.6;
+      opacity: 0.9;
+    }
+
+    .test-info {
+      background: rgba(0, 0, 0, 0.3);
+      padding: 1rem;
+      border-radius: 8px;
+      margin-top: 1rem;
+      font-size: 0.875rem;
+    }
+
+    .support-check {
+      background: rgba(255, 255, 255, 0.2);
+      backdrop-filter: blur(20px);
+      -webkit-backdrop-filter: blur(20px);
+      padding: 1.5rem;
+      border-radius: 12px;
+      margin-top: 2rem;
+    }
+
+    .status {
+      display: inline-block;
+      padding: 0.25rem 0.75rem;
+      border-radius: 4px;
+      font-weight: bold;
+      margin-left: 0.5rem;
+    }
+
+    .status.supported {
+      background: #10b981;
+      color: white;
+    }
+
+    .status.not-supported {
+      background: #ef4444;
+      color: white;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>🌊 液态玻璃效果测试</h1>
+
+    <div class="glass-card">
+      <h2>测试卡片 1</h2>
+      <p>如果你能看到这个卡片有模糊的背景效果，说明 backdrop-filter 正常工作。</p>
+      <p>背景应该是半透明的，并且能看到模糊的渐变色。</p>
+    </div>
+
+    <div class="glass-card" style="backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px);">
+      <h2>测试卡片 2 - 强模糊</h2>
+      <p>这个卡片使用了更强的模糊效果（20px）。</p>
+      <p>模糊应该比上面的卡片更明显。</p>
+    </div>
+
+    <div class="support-check">
+      <h2>浏览器支持检测</h2>
+      <div class="test-info">
+        <p>backdrop-filter: <span id="backdrop-support" class="status">检测中...</span></p>
+        <p>-webkit-backdrop-filter: <span id="webkit-support" class="status">检测中...</span></p>
+        <p>浏览器: <strong id="browser-info"></strong></p>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    // 检测浏览器支持
+    function checkSupport() {
+      const testElement = document.createElement('div');
+
+      // 检测 backdrop-filter
+      const backdropSupported = CSS.supports('backdrop-filter', 'blur(10px)');
+      const webkitSupported = CSS.supports('-webkit-backdrop-filter', 'blur(10px)');
+
+      document.getElementById('backdrop-support').textContent = backdropSupported ? '✓ 支持' : '✗ 不支持';
+      document.getElementById('backdrop-support').className = backdropSupported ? 'status supported' : 'status not-supported';
+
+      document.getElementById('webkit-support').textContent = webkitSupported ? '✓ 支持' : '✗ 不支持';
+      document.getElementById('webkit-support').className = webkitSupported ? 'status supported' : 'status not-supported';
+
+      // 显示浏览器信息
+      document.getElementById('browser-info').textContent = navigator.userAgent;
+    }
+
+    checkSupport();
+  </script>
+</body>
+</html>
