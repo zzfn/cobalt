@@ -1,6 +1,6 @@
-import { useState } from 'react';
-import { useAtom, useAtomValue } from 'jotai';
-import { Sparkles, Search, Filter } from 'lucide-react';
+import { useEffect } from 'react';
+import { useAtom, useAtomValue, useSetAtom } from 'jotai';
+import { Sparkles, Search, Filter, RefreshCw } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import {
@@ -18,72 +18,59 @@ import {
   filteredSkillsAtom,
   skillsFilterAtom,
   skillsLoadingAtom,
+  skillsErrorAtom,
 } from '@/store/skillsAtoms';
-import type { SkillRegistryEntry } from '@/types/skills';
-
-// 模拟数据
-const mockSkills: SkillRegistryEntry[] = [
-  {
-    id: '1',
-    name: 'commit',
-    description: '创建高质量的 Git 提交信息',
-    enabled: true,
-    source: 'builtin',
-    metadata: {
-      name: 'commit',
-      version: '1.0.0',
-      description: '创建高质量的 Git 提交信息',
-      tags: ['git', 'workflow'],
-    },
-  },
-  {
-    id: '2',
-    name: 'code-review',
-    description: '代码审查和质量检查',
-    enabled: true,
-    source: 'builtin',
-    metadata: {
-      name: 'code-review',
-      version: '1.0.0',
-      description: '代码审查和质量检查',
-      tags: ['review', 'quality'],
-    },
-  },
-  {
-    id: '3',
-    name: 'custom-skill',
-    description: '自定义的本地 Skill',
-    enabled: false,
-    source: 'local',
-    path: '~/.claude/skills/custom-skill',
-    metadata: {
-      name: 'custom-skill',
-      version: '0.1.0',
-      description: '自定义的本地 Skill',
-      tags: ['custom'],
-    },
-  },
-];
+import {
+  listInstalledSkills,
+  toggleSkill as toggleSkillApi,
+} from '@/services/skills';
 
 export default function SkillsList() {
   const [skills, setSkills] = useAtom(skillsListAtom);
   const [filter, setFilter] = useAtom(skillsFilterAtom);
   const filteredSkills = useAtomValue(filteredSkillsAtom);
-  const loading = useAtomValue(skillsLoadingAtom);
+  const [loading, setLoading] = useAtom(skillsLoadingAtom);
+  const setError = useSetAtom(skillsErrorAtom);
 
-  // 初始化模拟数据
-  useState(() => {
-    if (skills.length === 0) {
-      setSkills(mockSkills);
+  // 加载 Skills 数据
+  const loadSkills = async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      const data = await listInstalledSkills();
+      setSkills(data);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : '加载 Skills 失败';
+      setError(message);
+      console.error('加载 Skills 失败:', err);
+    } finally {
+      setLoading(false);
     }
-  });
+  };
 
-  const handleToggleSkill = (skillId: string, enabled: boolean) => {
+  // 初始加载
+  useEffect(() => {
+    loadSkills();
+  }, []);
+
+  const handleToggleSkill = async (skillId: string, enabled: boolean) => {
+    const skill = skills.find((s) => s.id === skillId);
+    if (!skill) return;
+
+    // 乐观更新 UI
     setSkills((prev) =>
-      prev.map((skill) =>
-        skill.id === skillId ? { ...skill, enabled } : skill
-      )
+      prev.map((s) => (s.id === skillId ? { ...s, enabled } : s))
     );
+
+    try {
+      await toggleSkillApi(skill.name, enabled);
+    } catch (err) {
+      // 回滚
+      setSkills((prev) =>
+        prev.map((s) => (s.id === skillId ? { ...s, enabled: !enabled } : s))
+      );
+      console.error('切换 Skill 状态失败:', err);
+    }
   };
 
   const sourceFilters = [
@@ -95,12 +82,20 @@ export default function SkillsList() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center gap-3">
-        <Sparkles className="h-8 w-8" />
-        <div>
-          <h1 className="text-2xl font-bold">Skills 管理</h1>
-          <p className="text-muted-foreground">管理和配置 Claude 的 Skills</p>
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-3">
+          <Sparkles className="h-8 w-8" />
+          <div>
+            <h1 className="text-2xl font-bold">Skills 管理</h1>
+            <p className="text-muted-foreground">
+              管理和配置 Claude 的 Skills
+            </p>
+          </div>
         </div>
+        <Button variant="outline" size="sm" onClick={loadSkills} disabled={loading}>
+          <RefreshCw className={`mr-2 h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
+          刷新
+        </Button>
       </div>
 
       {/* 搜索和过滤 */}
@@ -133,7 +128,9 @@ export default function SkillsList() {
                   {sourceFilters.map((option) => (
                     <Badge
                       key={option.value}
-                      variant={filter.source === option.value ? 'default' : 'outline'}
+                      variant={
+                        filter.source === option.value ? 'default' : 'outline'
+                      }
                       className="cursor-pointer"
                       onClick={() =>
                         setFilter({ ...filter, source: option.value })
@@ -161,7 +158,9 @@ export default function SkillsList() {
           <Sparkles className="h-12 w-12 text-muted-foreground" />
           <h3 className="mt-4 text-lg font-medium">没有找到 Skills</h3>
           <p className="mt-2 text-sm text-muted-foreground">
-            尝试调整搜索条件或过滤器
+            {skills.length === 0
+              ? '还没有安装任何 Skills，请在 ~/.claude/skills 目录下添加'
+              : '尝试调整搜索条件或过滤器'}
           </p>
         </div>
       ) : (

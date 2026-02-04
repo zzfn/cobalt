@@ -13,79 +13,84 @@ Cobalt 是一个基于 Tauri 的桌面应用，用于可视化管理 Claude Code
 
 - ✅ 项目初始化完成（Tauri 2 + React 19 + TypeScript）
 - ✅ 完成需求调研和架构设计
-- 📋 准备开始实现核心功能
+- ✅ 前端基础架构完成（路由、状态管理、组件库）
+- ✅ 前端页面 UI 完成（Dashboard、Settings、Skills）
+- ✅ **Rust 后端命令已实现**（配置读写、Skills 管理）
+- ✅ **前后端已连接**（通过 Tauri invoke 调用）
+- 📋 下一步：测试和完善功能
 
 ## 短期目标（第一阶段）
 
 ### 1.1 Rust 后端基础架构
-- [ ] 创建命令模块结构（`commands/mod.rs`, `config.rs`, `skills.rs`）
-- [ ] 实现配置文件读写命令
-  - [ ] `get_claude_config_dir()` - 获取配置目录路径
-  - [ ] `read_settings()` / `write_settings()` - settings.json 管理
-  - [ ] `read_claude_md()` / `write_claude_md()` - CLAUDE.md 管理
-  - [ ] `backup_config()` - 配置备份功能
-- [ ] 实现 Skills 管理命令
-  - [ ] `read_skill_registry()` / `write_skill_registry()` - 注册表管理
-  - [ ] `read_skill_md()` - 读取 SKILL.md
-  - [ ] `toggle_skill()` - 启用/禁用 skill
-  - [ ] `uninstall_skill()` - 卸载 skill
-  - [ ] `list_skill_files()` - 列出 skill 文件
-- [ ] 在 `lib.rs` 中注册所有命令
-- [ ] 更新 `Cargo.toml` 依赖（serde, serde_json, chrono）
+- [x] 创建命令模块结构（`commands/mod.rs`, `config.rs`, `skills.rs`）
+- [x] 实现配置文件读写命令
+  - [x] `get_claude_config_dir()` - 获取配置目录路径
+  - [x] `read_settings()` / `write_settings()` - settings.json 管理
+  - [x] `read_claude_md()` / `write_claude_md()` - CLAUDE.md 管理
+  - [x] `backup_config()` - 配置备份功能
+- [x] 实现 Skills 管理命令
+  - [x] `read_skill_registry()` / `write_skill_registry()` - 注册表管理
+  - [x] `read_skill_md()` - 读取 SKILL.md
+  - [x] `toggle_skill()` - 启用/禁用 skill
+  - [x] `uninstall_skill()` - 卸载 skill
+  - [x] `list_skill_files()` - 列出 skill 文件
+  - [x] `list_installed_skills()` - 列出已安装 skills
+- [x] 在 `lib.rs` 中注册所有命令
+- [x] 更新 `Cargo.toml` 依赖（serde, serde_json, chrono, dirs, thiserror）
 
 ### 1.2 前端基础架构
-- [ ] 安装核心依赖
-  - [ ] react-router-dom（路由管理）
-  - [ ] jotai（状态管理）
-  - [ ] @monaco-editor/react（代码编辑器）
-  - [ ] react-markdown（Markdown 渲染）
-  - [ ] lucide-react（图标库）
-  - [ ] shadcn/ui（UI 组件库）
-- [ ] 初始化 shadcn/ui
-  - [ ] 运行 `npx shadcn@latest init` 配置项目
-  - [ ] 安装常用组件（Button, Card, Dialog, Input, Switch, Tabs 等）
-- [ ] 创建 TypeScript 类型定义
-  - [ ] `types/settings.ts` - Settings 类型
-  - [ ] `types/skills.ts` - Skills 类型
-- [ ] 创建 Jotai Atoms
-  - [ ] `store/settingsAtoms.ts` - 设置状态原子
-  - [ ] `store/skillsAtoms.ts` - Skills 状态原子
-  - [ ] `store/uiAtoms.ts` - UI 状态原子
-- [ ] 配置路由系统（`router/index.tsx`）
+- [x] 安装核心依赖
+  - [x] react-router-dom（路由管理）
+  - [x] jotai（状态管理）
+  - [x] @monaco-editor/react（代码编辑器）
+  - [x] react-markdown（Markdown 渲染）
+  - [x] lucide-react（图标库）
+  - [x] shadcn/ui（UI 组件库）
+- [x] 初始化 shadcn/ui
+  - [x] 运行 `npx shadcn@latest init` 配置项目
+  - [x] 安装常用组件（Button, Card, Dialog, Input, Switch, Tabs 等）
+- [x] 创建 TypeScript 类型定义
+  - [x] `types/settings.ts` - Settings 类型
+  - [x] `types/skills.ts` - Skills 类型
+- [x] 创建 Jotai Atoms
+  - [x] `store/settingsAtoms.ts` - 设置状态原子
+  - [x] `store/skillsAtoms.ts` - Skills 状态原子
+  - [x] `store/uiAtoms.ts` - UI 状态原子
+- [x] 配置路由系统（`router/index.tsx`）
 
 ### 1.3 核心组件开发
-- [ ] 布局组件
-  - [ ] `Layout.tsx` - 主布局（侧边栏 + 内容区）
-  - [ ] `Sidebar.tsx` - 导航侧边栏
-- [ ] 通用组件
-  - [ ] `MarkdownEditor.tsx` - Monaco Editor 封装
-  - [ ] `SkillCard.tsx` - Skill 卡片组件
+- [x] 布局组件
+  - [x] `Layout.tsx` - 主布局（侧边栏 + 内容区）
+  - [x] `Sidebar.tsx` - 导航侧边栏
+- [x] 通用组件
+  - [x] `MarkdownEditor.tsx` - Monaco Editor 封装
+  - [x] `SkillCard.tsx` - Skill 卡片组件
 
 ## 中期目标（第二阶段）
 
 ### 2.1 配置管理功能
-- [ ] 仪表板页面（`pages/Dashboard.tsx`）
-  - [ ] 显示配置概览（插件数量、skills 数量）
+- [x] 仪表板页面（`pages/Dashboard.tsx`）
+  - [ ] 显示配置概览（插件数量、skills 数量）⚠️ 使用静态数据
   - [ ] 显示最近更新的 skills
   - [ ] 快速操作按钮
-- [ ] 通用设置页面（`pages/Settings/General.tsx`）
-  - [ ] 表单展示 settings.json 各字段
+- [x] 通用设置页面（`pages/Settings/General.tsx`）
+  - [x] 表单展示 settings.json 各字段
   - [ ] 输入验证和错误提示
-  - [ ] 保存和备份功能
-- [ ] 全局指令编辑页面（`pages/Settings/Instructions.tsx`）
-  - [ ] Monaco Editor 集成
-  - [ ] 分屏布局（编辑器 + 预览）
+  - [ ] 保存和备份功能 ⚠️ 未连接后端
+- [x] 全局指令编辑页面（`pages/Settings/Instructions.tsx`）
+  - [x] Monaco Editor 集成
+  - [x] 分屏布局（编辑器 + 预览）
   - [ ] Ctrl+S 快捷键保存
-  - [ ] 语法高亮和自动补全
+  - [x] 语法高亮和自动补全
 
 ### 2.2 Skills 管理功能
-- [ ] Skills 列表页面（`pages/Skills/List.tsx`）
-  - [ ] 卡片式展示所有 skills
-  - [ ] 搜索和过滤功能
-  - [ ] 启用/禁用开关
-  - [ ] 卸载按钮（带确认对话框）
-- [ ] Skill 详情页面（`pages/Skills/Detail.tsx`）
-  - [ ] 显示 SKILL.md 内容（Markdown 渲染）
+- [x] Skills 列表页面（`pages/Skills/List.tsx`）
+  - [x] 卡片式展示所有 skills ⚠️ 使用 Mock 数据
+  - [x] 搜索和过滤功能
+  - [x] 启用/禁用开关
+  - [x] 卸载按钮（带确认对话框）
+- [x] Skill 详情页面（`pages/Skills/Detail.tsx`）
+  - [x] 显示 SKILL.md 内容（Markdown 渲染）⚠️ 使用写死数据
   - [ ] 显示元数据（安装时间、仓库地址、commit hash）
   - [ ] 列出包含的文件（scripts、references）
   - [ ] "在文件管理器中打开"功能
@@ -260,3 +265,5 @@ chrono = "0.4"
 
 - 2026-02-04: 创建路线图文档
 - 2026-02-04: 完成项目规划和架构设计，明确三个阶段的开发目标
+- 2026-02-04: 更新完成状态 - 前端基础架构和 UI 页面已完成，使用 Mock 数据
+- 2026-02-04: **完成 1.1 阶段** - 实现 Rust 后端命令，前后端连接完成

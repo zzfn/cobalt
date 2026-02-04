@@ -1,7 +1,7 @@
 // Claude 设置相关类型定义
 
 /**
- * Claude 全局设置
+ * Claude 全局设置（UI 应用设置）
  */
 export interface ClaudeSettings {
   // 通用设置
@@ -20,6 +20,18 @@ export interface ClaudeSettings {
   // 其他设置
   autoSave: boolean;
   autoSaveInterval: number;
+}
+
+/**
+ * Claude Code settings.json 配置
+ */
+export interface ClaudeCodeSettings {
+  permissions: {
+    allow: string[];
+    deny: string[];
+  };
+  apiKeyHelper?: string;
+  env: Record<string, string>;
 }
 
 /**
