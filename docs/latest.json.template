@@ -1,0 +1,23 @@
+{
+  "version": "0.3.0",
+  "notes": "## 更新内容\n\n### 新功能\n- 新增应用内自动更新功能\n- 支持一键更新安装\n\n### 改进\n- 优化用户界面\n- 提升性能\n\n### 修复\n- 修复已知问题",
+  "pub_date": "2024-02-04T12:00:00Z",
+  "platforms": {
+    "darwin-x86_64": {
+      "signature": "将 .sig 文件内容粘贴到这里",
+      "url": "https://github.com/YOUR_USERNAME/cobalt/releases/download/v0.3.0/cobalt.app.tar.gz"
+    },
+    "darwin-aarch64": {
+      "signature": "将 .sig 文件内容粘贴到这里",
+      "url": "https://github.com/YOUR_USERNAME/cobalt/releases/download/v0.3.0/cobalt.app.tar.gz"
+    },
+    "windows-x86_64": {
+      "signature": "将 .sig 文件内容粘贴到这里",
+      "url": "https://github.com/YOUR_USERNAME/cobalt/releases/download/v0.3.0/cobalt_0.3.0_x64_en-US.msi"
+    },
+    "linux-x86_64": {
+      "signature": "将 .sig 文件内容粘贴到这里",
+      "url": "https://github.com/YOUR_USERNAME/cobalt/releases/download/v0.3.0/cobalt_0.3.0_amd64.AppImage"
+    }
+  }
+}
