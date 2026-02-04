@@ -3,6 +3,7 @@ import { Outlet } from 'react-router-dom';
 import { useAtomValue } from 'jotai';
 import { Toaster } from '@/components/ui/sonner';
 import Sidebar from './Sidebar';
+import UpdateChecker from '@/components/UpdateChecker';
 import { resolvedThemeAtom } from '@/store/uiAtoms';
 
 export default function Layout() {
@@ -27,6 +28,7 @@ export default function Layout() {
         </div>
       </main>
       <Toaster />
+      <UpdateChecker />
     </div>
   );
 }

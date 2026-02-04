@@ -31,5 +31,15 @@
       "icons/icon.icns",
       "icons/icon.ico"
     ]
+  },
+  "plugins": {
+    "updater": {
+      "active": true,
+      "endpoints": [
+        "https://github.com/zzfn/cobalt/releases/latest/download/latest.json"
+      ],
+      "dialog": true,
+      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDcyQ0U3NUFBMTZCRDM4REEKUldUYU9MMFdxblhPY3I2cXBOMkFWeVU0LzRHR1NZWWZzYXFORENZZ2RNNmpVcmJMOVhrU2U3U0wK"
+    }
   }
 }
