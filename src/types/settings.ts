@@ -24,13 +24,21 @@ export interface ClaudeSettings {
 
 /**
  * Claude Code settings.json 配置
+ * 使用灵活的类型以支持所有字段（包括 statusLine 等）
  */
 export interface ClaudeCodeSettings {
-  permissions: {
+  permissions?: {
     allow: string[];
     deny: string[];
   };
-  env: Record<string, string>;
+  env?: Record<string, string>;
+  statusLine?: {
+    command?: string;
+    padding?: number;
+    type?: string;
+  };
+  // 允许其他任意字段
+  [key: string]: any;
 }
 
 /**

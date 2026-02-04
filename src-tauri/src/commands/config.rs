@@ -17,32 +17,19 @@ pub fn get_claude_config_dir() -> Result<String, String> {
     get_claude_dir().map(|p| p.to_string_lossy().to_string())
 }
 
-/// Claude settings.json 结构
-#[derive(Debug, Serialize, Deserialize, Default)]
-#[serde(rename_all = "camelCase")]
-pub struct ClaudeSettings {
-    #[serde(default)]
-    pub permissions: Permissions,
-    #[serde(default)]
-    pub env: std::collections::HashMap<String, String>,
-}
-
-#[derive(Debug, Serialize, Deserialize, Default)]
-#[serde(rename_all = "camelCase")]
-pub struct Permissions {
-    #[serde(default)]
-    pub allow: Vec<String>,
-    #[serde(default)]
-    pub deny: Vec<String>,
-}
-
-/// 读取 settings.json
+/// 读取 settings.json（保留所有字段）
 #[tauri::command]
-pub fn read_settings() -> Result<ClaudeSettings, String> {
+pub fn read_settings() -> Result<serde_json::Value, String> {
     let settings_path = get_claude_dir()?.join("settings.json");
 
     if !settings_path.exists() {
-        return Ok(ClaudeSettings::default());
+        return Ok(serde_json::json!({
+            "permissions": {
+                "allow": [],
+                "deny": []
+            },
+            "env": {}
+        }));
     }
 
     let content = fs::read_to_string(&settings_path)
@@ -51,9 +38,9 @@ pub fn read_settings() -> Result<ClaudeSettings, String> {
     serde_json::from_str(&content).map_err(|e| format!("解析 settings.json 失败: {}", e))
 }
 
-/// 写入 settings.json
+/// 写入 settings.json（保留所有字段）
 #[tauri::command]
-pub fn write_settings(settings: ClaudeSettings) -> Result<(), String> {
+pub fn write_settings(settings: serde_json::Value) -> Result<(), String> {
     let settings_path = get_claude_dir()?.join("settings.json");
 
     let content = serde_json::to_string_pretty(&settings)

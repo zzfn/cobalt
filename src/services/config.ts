@@ -4,15 +4,6 @@ import type { ClaudeCodeSettings, ApiKeyProfile } from '@/types/settings';
 import type { DashboardStats, ConfigHealth, ActivityRecord } from '@/types/dashboard';
 import { listInstalledSkills } from './skills';
 
-// 后端返回的设置类型
-interface BackendSettings {
-  permissions: {
-    allow: string[];
-    deny: string[];
-  };
-  env: Record<string, string>;
-}
-
 // 备份信息
 export interface BackupInfo {
   path: string;
@@ -33,14 +24,10 @@ export async function getClaudeConfigDir(): Promise<string> {
 }
 
 /**
- * 读取 settings.json
+ * 读取 settings.json（保留所有字段）
  */
 export async function readSettings(): Promise<ClaudeCodeSettings> {
-  const settings = await invoke<BackendSettings>('read_settings');
-  return {
-    permissions: settings.permissions || { allow: [], deny: [] },
-    env: settings.env || {},
-  };
+  return invoke<ClaudeCodeSettings>('read_settings');
 }
 
 /**
@@ -131,8 +118,8 @@ export async function getDashboardStats(): Promise<DashboardStats> {
       activeId: profiles.activeProfileId,
     },
     config: {
-      envVarsCount: Object.keys(settings.env).length,
-      permissionsCount: settings.permissions.allow.length + settings.permissions.deny.length,
+      envVarsCount: Object.keys(settings.env || {}).length,
+      permissionsCount: (settings.permissions?.allow.length || 0) + (settings.permissions?.deny.length || 0),
       hasGlobalInstructions: true,
     },
   };

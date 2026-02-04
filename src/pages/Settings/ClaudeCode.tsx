@@ -32,8 +32,8 @@ export default function ClaudeCodeSettings() {
   const [hasChanges, setHasChanges] = useState(false);
 
   // 从 env 中提取 API Key 和 Base URL
-  const currentApiKey = settings.env[ENV_API_KEY] || '';
-  const currentBaseUrl = settings.env[ENV_BASE_URL] || '';
+  const currentApiKey = settings.env?.[ENV_API_KEY] || '';
+  const currentBaseUrl = settings.env?.[ENV_BASE_URL] || '';
 
   // 加载配置
   const loadConfig = async () => {
@@ -72,8 +72,8 @@ export default function ClaudeCodeSettings() {
       setHasChanges(false);
       // 记录活动
       logActivity('settings_update', '更新了 Claude Code 配置', {
-        envVarsCount: Object.keys(settings.env).length,
-        permissionsCount: settings.permissions.allow.length + settings.permissions.deny.length,
+        envVarsCount: Object.keys(settings.env || {}).length,
+        permissionsCount: (settings.permissions?.allow.length || 0) + (settings.permissions?.deny.length || 0),
       });
     } catch (error) {
       toast.error('保存配置失败', {
@@ -116,7 +116,10 @@ export default function ClaudeCodeSettings() {
   const handleAllowChange = (allow: string[]) => {
     setSettings((prev) => ({
       ...prev,
-      permissions: { ...prev.permissions, allow },
+      permissions: {
+        allow,
+        deny: prev.permissions?.deny || []
+      },
     }));
     setHasChanges(true);
   };
@@ -124,7 +127,10 @@ export default function ClaudeCodeSettings() {
   const handleDenyChange = (deny: string[]) => {
     setSettings((prev) => ({
       ...prev,
-      permissions: { ...prev.permissions, deny },
+      permissions: {
+        allow: prev.permissions?.allow || [],
+        deny
+      },
     }));
     setHasChanges(true);
   };
@@ -139,7 +145,7 @@ export default function ClaudeCodeSettings() {
   const handleApiKeyChange = (value: string) => {
     setSettings((prev) => ({
       ...prev,
-      env: { ...prev.env, [ENV_API_KEY]: value },
+      env: { ...(prev.env || {}), [ENV_API_KEY]: value },
     }));
     setHasChanges(true);
   };
@@ -148,7 +154,7 @@ export default function ClaudeCodeSettings() {
   const handleBaseUrlChange = (value: string) => {
     setSettings((prev) => ({
       ...prev,
-      env: { ...prev.env, [ENV_BASE_URL]: value },
+      env: { ...(prev.env || {}), [ENV_BASE_URL]: value },
     }));
     setHasChanges(true);
   };
@@ -220,14 +226,14 @@ export default function ClaudeCodeSettings() {
 
       {/* 权限管理 */}
       <PermissionsCard
-        allow={settings.permissions.allow}
-        deny={settings.permissions.deny}
+        allow={settings.permissions?.allow || []}
+        deny={settings.permissions?.deny || []}
         onAllowChange={handleAllowChange}
         onDenyChange={handleDenyChange}
       />
 
       {/* 环境变量 */}
-      <EnvVariablesCard env={settings.env} onChange={handleEnvChange} />
+      <EnvVariablesCard env={settings.env || {}} onChange={handleEnvChange} />
     </div>
   );
 }
