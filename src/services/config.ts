@@ -8,7 +8,6 @@ interface BackendSettings {
     allow: string[];
     deny: string[];
   };
-  apiKeyHelper?: string;
   env: Record<string, string>;
 }
 
@@ -38,7 +37,6 @@ export async function readSettings(): Promise<ClaudeCodeSettings> {
   const settings = await invoke<BackendSettings>('read_settings');
   return {
     permissions: settings.permissions || { allow: [], deny: [] },
-    apiKeyHelper: settings.apiKeyHelper,
     env: settings.env || {},
   };
 }

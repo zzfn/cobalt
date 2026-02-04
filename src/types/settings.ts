@@ -30,7 +30,6 @@ export interface ClaudeCodeSettings {
     allow: string[];
     deny: string[];
   };
-  apiKeyHelper?: string;
   env: Record<string, string>;
 }
 

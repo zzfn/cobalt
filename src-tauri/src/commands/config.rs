@@ -24,8 +24,6 @@ pub struct ClaudeSettings {
     #[serde(default)]
     pub permissions: Permissions,
     #[serde(default)]
-    pub api_key_helper: Option<String>,
-    #[serde(default)]
     pub env: std::collections::HashMap<String, String>,
 }
 
