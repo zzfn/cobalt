@@ -219,7 +219,7 @@ release-major: bump-major
 generate-keys:
 	@echo "生成更新签名密钥对..."
 	@mkdir -p ~/.tauri
-	pnpm tauri signer generate -w ~/.tauri/cobalt.key
+	pnpm tauri signer generate -w ~/.tauri/cobalt.key --force
 	@echo "✓ 密钥已生成"
 	@echo "  私钥: ~/.tauri/cobalt.key (请妥善保管)"
 	@echo "  公钥: 已输出到终端，请复制到 src-tauri/tauri.conf.json"
