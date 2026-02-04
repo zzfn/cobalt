@@ -19,7 +19,7 @@ export default function ActivityList({
   loading = false,
 }: ActivityListProps) {
   return (
-    <Card className="flex h-full flex-col">
+    <Card>
       <CardHeader className="flex flex-row items-center justify-between pb-2">
         <div className="flex items-center gap-2">
           <History className="h-5 w-5 text-muted-foreground" />
@@ -39,7 +39,7 @@ export default function ActivityList({
           </Button>
         )}
       </CardHeader>
-      <CardContent className="flex-1 overflow-hidden">
+      <CardContent>
         {loading ? (
           <div className="space-y-3">
             {Array.from({ length: 4 }).map((_, i) => (
@@ -59,7 +59,10 @@ export default function ActivityList({
             <p className="text-xs mt-1">执行操作后将显示在这里</p>
           </div>
         ) : (
-          <ScrollArea className="h-full pr-4">
+          <ScrollArea
+            className="pr-2 [&_[data-radix-scroll-area-scrollbar]]:w-2 [&_[data-radix-scroll-area-thumb]]:bg-border/80 hover:[&_[data-radix-scroll-area-thumb]]:bg-border"
+            style={{ height: maxHeight }}
+          >
             <div className="divide-y">
               {activities.map((activity) => (
                 <ActivityItem key={activity.id} activity={activity} />
