@@ -14,6 +14,7 @@ import {
 } from '@/components/ui/dialog';
 import { cn } from '@/lib/utils';
 import type { ApiKeyProfile } from '@/types/settings';
+import { logActivity } from '@/lib/activityLogger';
 
 interface ApiKeyCardProps {
   profiles: ApiKeyProfile[];
@@ -153,6 +154,11 @@ export default function ApiKeyCard({
   const handleSwitchProfile = (profile: ApiKeyProfile) => {
     if (activeProfileId !== profile.id) {
       onSwitchProfile(profile.id);
+      // 记录活动
+      logActivity('profile_switch', `切换到 API 配置档案: ${profile.name}`, {
+        profileId: profile.id,
+        profileName: profile.name,
+      });
     }
   };
 

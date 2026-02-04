@@ -12,6 +12,7 @@ import {
   writeApiProfiles,
   switchApiProfile,
 } from '@/services/config';
+import { logActivity } from '@/lib/activityLogger';
 import type { ClaudeCodeSettings, ApiKeyProfile } from '@/types/settings';
 
 // 环境变量 key 常量
@@ -68,6 +69,11 @@ export default function ClaudeCodeSettings() {
       ]);
       toast.success('配置已保存');
       setHasChanges(false);
+      // 记录活动
+      logActivity('settings_update', '更新了 Claude Code 配置', {
+        envVarsCount: Object.keys(settings.env).length,
+        permissionsCount: settings.permissions.allow.length + settings.permissions.deny.length,
+      });
     } catch (error) {
       toast.error('保存配置失败', {
         description: String(error),

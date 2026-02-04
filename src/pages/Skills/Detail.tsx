@@ -16,6 +16,7 @@ import { Separator } from '@/components/ui/separator';
 import MarkdownEditor from '@/components/common/MarkdownEditor';
 import type { SkillDetail as SkillDetailType } from '@/types/skills';
 import { getSkillDetail, toggleSkill as toggleSkillApi } from '@/services/skills';
+import { logActivity } from '@/lib/activityLogger';
 
 export default function SkillDetail() {
   const { skillName } = useParams<{ skillName: string }>();
@@ -54,6 +55,12 @@ export default function SkillDetail() {
 
     try {
       await toggleSkillApi(skill.name, enabled);
+      // 记录活动
+      logActivity(
+        'skill_toggle',
+        `${enabled ? '启用' : '禁用'}了 Skill: ${skill.name}`,
+        { skillName: skill.name, enabled }
+      );
     } catch (err) {
       // 回滚
       setSkill((prev) => (prev ? { ...prev, enabled: !enabled } : null));
