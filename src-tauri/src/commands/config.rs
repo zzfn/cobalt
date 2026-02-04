@@ -171,6 +171,33 @@ pub fn write_api_profiles(profiles: ApiKeyProfiles) -> Result<(), String> {
     fs::write(&profiles_path, content).map_err(|e| format!("写入 api-profiles.json 失败: {}", e))
 }
 
+/// 更新 settings.json 中的环境变量（部分更新）
+#[tauri::command]
+pub fn update_env_vars(updates: std::collections::HashMap<String, String>) -> Result<(), String> {
+    let settings_path = get_claude_dir()?.join("settings.json");
+
+    // 读取现有配置
+    let mut settings = if settings_path.exists() {
+        let content = fs::read_to_string(&settings_path)
+            .map_err(|e| format!("读取 settings.json 失败: {}", e))?;
+        serde_json::from_str::<ClaudeSettings>(&content)
+            .map_err(|e| format!("解析 settings.json 失败: {}", e))?
+    } else {
+        ClaudeSettings::default()
+    };
+
+    // 只更新指定的环境变量
+    for (key, value) in updates {
+        settings.env.insert(key, value);
+    }
+
+    // 写回配置
+    let content = serde_json::to_string_pretty(&settings)
+        .map_err(|e| format!("序列化 settings 失败: {}", e))?;
+
+    fs::write(&settings_path, content).map_err(|e| format!("写入 settings.json 失败: {}", e))
+}
+
 /// 切换 API Key 配置档案
 #[tauri::command]
 pub fn switch_api_profile(profile_id: String) -> Result<(), String> {
@@ -185,11 +212,11 @@ pub fn switch_api_profile(profile_id: String) -> Result<(), String> {
         .ok_or_else(|| format!("未找到配置档案: {}", profile_id))?
         .clone();
 
-    // 更新 settings.json 的 env 字段
-    let mut settings = read_settings()?;
-    settings.env.insert("ANTHROPIC_AUTH_TOKEN".to_string(), profile.api_key);
-    settings.env.insert("ANTHROPIC_BASE_URL".to_string(), profile.base_url);
-    write_settings(settings)?;
+    // 只更新 settings.json 中的 API 相关环境变量
+    let mut updates = std::collections::HashMap::new();
+    updates.insert("ANTHROPIC_AUTH_TOKEN".to_string(), profile.api_key);
+    updates.insert("ANTHROPIC_BASE_URL".to_string(), profile.base_url);
+    update_env_vars(updates)?;
 
     // 更新 active profile
     profiles.active_profile_id = Some(profile_id);

@@ -91,3 +91,10 @@ export async function writeApiProfiles(profiles: ApiKeyProfiles): Promise<void> 
 export async function switchApiProfile(profileId: string): Promise<void> {
   await invoke('switch_api_profile', { profileId });
 }
+
+/**
+ * 更新环境变量（部分更新）
+ */
+export async function updateEnvVars(updates: Record<string, string>): Promise<void> {
+  await invoke('update_env_vars', { updates });
+}
