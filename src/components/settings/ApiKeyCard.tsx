@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Key, Plus, Trash2, Check, Pencil } from 'lucide-react';
+import { Key, Plus, Trash2, Check, Pencil, Globe, Copy } from 'lucide-react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -42,6 +42,25 @@ export default function ApiKeyCard({
   const [profileName, setProfileName] = useState('');
   const [profileApiKey, setProfileApiKey] = useState('');
   const [profileBaseUrl, setProfileBaseUrl] = useState('');
+  const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
+
+  // 遮蔽 API Key 显示
+  const maskApiKey = (key: string) => {
+    if (!key) return '未设置';
+    if (key.length <= 8) return '••••••••';
+    return `${key.slice(0, 7)}...${key.slice(-4)}`;
+  };
+
+  // 提取域名显示
+  const extractDomain = (url: string) => {
+    if (!url) return '未设置';
+    try {
+      const u = new URL(url);
+      return u.host;
+    } catch {
+      return url;
+    }
+  };
 
   const handleCreateProfile = () => {
     setEditingProfile(null);
@@ -51,7 +70,8 @@ export default function ApiKeyCard({
     setDialogOpen(true);
   };
 
-  const handleEditProfile = (profile: ApiKeyProfile) => {
+  const handleEditProfile = (e: React.MouseEvent, profile: ApiKeyProfile) => {
+    e.stopPropagation();
     setEditingProfile(profile);
     setProfileName(profile.name);
     setProfileApiKey(profile.apiKey);
@@ -63,7 +83,6 @@ export default function ApiKeyCard({
     if (!profileName.trim()) return;
 
     if (editingProfile) {
-      // 编辑现有配置
       const updatedProfiles = profiles.map((p) =>
         p.id === editingProfile.id
           ? { ...p, name: profileName.trim(), apiKey: profileApiKey, baseUrl: profileBaseUrl }
@@ -71,7 +90,6 @@ export default function ApiKeyCard({
       );
       onProfilesChange(updatedProfiles);
     } else {
-      // 创建新配置
       const newProfile: ApiKeyProfile = {
         id: crypto.randomUUID(),
         name: profileName.trim(),
@@ -85,16 +103,38 @@ export default function ApiKeyCard({
     setDialogOpen(false);
   };
 
-  const handleDeleteProfile = (profileId: string) => {
-    const updatedProfiles = profiles.filter((p) => p.id !== profileId);
-    onProfilesChange(updatedProfiles);
-    if (activeProfileId === profileId) {
-      onActiveProfileChange(null);
+  const handleDeleteProfile = (e: React.MouseEvent, profileId: string) => {
+    e.stopPropagation();
+    if (deleteConfirmId === profileId) {
+      const updatedProfiles = profiles.filter((p) => p.id !== profileId);
+      onProfilesChange(updatedProfiles);
+      if (activeProfileId === profileId) {
+        onActiveProfileChange(null);
+      }
+      setDeleteConfirmId(null);
+    } else {
+      setDeleteConfirmId(profileId);
+      // 3秒后重置确认状态
+      setTimeout(() => setDeleteConfirmId(null), 3000);
     }
   };
 
   const handleSwitchProfile = (profile: ApiKeyProfile) => {
-    onSwitchProfile(profile.id);
+    if (activeProfileId !== profile.id) {
+      onSwitchProfile(profile.id);
+    }
+  };
+
+  const handleDuplicateProfile = (e: React.MouseEvent, profile: ApiKeyProfile) => {
+    e.stopPropagation();
+    const newProfile: ApiKeyProfile = {
+      id: crypto.randomUUID(),
+      name: `${profile.name} (副本)`,
+      apiKey: profile.apiKey,
+      baseUrl: profile.baseUrl,
+      createdAt: new Date().toISOString(),
+    };
+    onProfilesChange([...profiles, newProfile]);
   };
 
   return (
@@ -106,60 +146,107 @@ export default function ApiKeyCard({
             API 配置
           </CardTitle>
           <CardDescription>
-            管理 API Key 和 Base URL，支持多配置档案切换
+            管理多个 API 配置，点击卡片快速切换
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
-          {/* 配置档案列表 */}
-          {profiles.length > 0 && (
-            <div className="space-y-2">
-              <h4 className="text-sm font-medium">配置档案</h4>
-              <div className="flex flex-wrap gap-2">
-                {profiles.map((profile) => (
-                  <div
-                    key={profile.id}
-                    className={cn(
-                      'group flex items-center gap-2 rounded-lg border px-3 py-2 transition-colors',
-                      activeProfileId === profile.id
-                        ? 'border-primary bg-primary/10'
-                        : 'hover:bg-accent'
-                    )}
-                  >
-                    <button
-                      onClick={() => handleSwitchProfile(profile)}
-                      className="flex items-center gap-2"
-                    >
-                      {activeProfileId === profile.id && (
-                        <Check className="h-4 w-4 text-primary" />
-                      )}
-                      <span className="text-sm font-medium">{profile.name}</span>
-                    </button>
+          {/* 配置档案卡片网格 */}
+          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+            {profiles.map((profile) => {
+              const isActive = activeProfileId === profile.id;
+              const isDeleting = deleteConfirmId === profile.id;
+
+              return (
+                <div
+                  key={profile.id}
+                  onClick={() => handleSwitchProfile(profile)}
+                  className={cn(
+                    'group relative cursor-pointer rounded-lg border-2 p-4 transition-all hover:shadow-md',
+                    isActive
+                      ? 'border-primary bg-primary/5 shadow-sm'
+                      : 'border-transparent bg-muted/50 hover:border-muted-foreground/20'
+                  )}
+                >
+                  {/* 激活标记 */}
+                  {isActive && (
+                    <div className="absolute -top-2 -right-2 rounded-full bg-primary p-1">
+                      <Check className="h-3 w-3 text-primary-foreground" />
+                    </div>
+                  )}
+
+                  {/* 档案名称 */}
+                  <div className="mb-3 flex items-center justify-between">
+                    <h4 className="font-medium truncate pr-2">{profile.name}</h4>
+                    {/* 操作按钮 */}
                     <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
                       <button
-                        onClick={() => handleEditProfile(profile)}
-                        className="p-1 rounded hover:bg-accent"
+                        onClick={(e) => handleDuplicateProfile(e, profile)}
+                        className="p-1.5 rounded-md hover:bg-background"
+                        title="复制"
                       >
-                        <Pencil className="h-3 w-3" />
+                        <Copy className="h-3.5 w-3.5 text-muted-foreground" />
                       </button>
                       <button
-                        onClick={() => handleDeleteProfile(profile.id)}
-                        className="p-1 rounded hover:bg-destructive/20 text-destructive"
+                        onClick={(e) => handleEditProfile(e, profile)}
+                        className="p-1.5 rounded-md hover:bg-background"
+                        title="编辑"
                       >
-                        <Trash2 className="h-3 w-3" />
+                        <Pencil className="h-3.5 w-3.5 text-muted-foreground" />
+                      </button>
+                      <button
+                        onClick={(e) => handleDeleteProfile(e, profile.id)}
+                        className={cn(
+                          'p-1.5 rounded-md transition-colors',
+                          isDeleting
+                            ? 'bg-destructive text-destructive-foreground'
+                            : 'hover:bg-destructive/10 text-destructive'
+                        )}
+                        title={isDeleting ? '再次点击确认删除' : '删除'}
+                      >
+                        <Trash2 className="h-3.5 w-3.5" />
                       </button>
                     </div>
                   </div>
-                ))}
-              </div>
-            </div>
-          )}
 
-          {/* 当前配置 */}
-          <div className="space-y-3">
-            <h4 className="text-sm font-medium">当前配置</h4>
-            <div className="space-y-2">
-              <div>
-                <label className="text-xs text-muted-foreground">API Key (ANTHROPIC_AUTH_TOKEN)</label>
+                  {/* API Key 预览 */}
+                  <div className="space-y-1.5 text-sm">
+                    <div className="flex items-center gap-2 text-muted-foreground">
+                      <Key className="h-3.5 w-3.5 shrink-0" />
+                      <span className="font-mono text-xs truncate">
+                        {maskApiKey(profile.apiKey)}
+                      </span>
+                    </div>
+                    <div className="flex items-center gap-2 text-muted-foreground">
+                      <Globe className="h-3.5 w-3.5 shrink-0" />
+                      <span className="font-mono text-xs truncate">
+                        {extractDomain(profile.baseUrl)}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+
+            {/* 新建卡片 */}
+            <button
+              onClick={handleCreateProfile}
+              className="flex flex-col items-center justify-center gap-2 rounded-lg border-2 border-dashed border-muted-foreground/25 p-4 text-muted-foreground transition-colors hover:border-primary hover:text-primary hover:bg-primary/5 min-h-[120px]"
+            >
+              <Plus className="h-6 w-6" />
+              <span className="text-sm font-medium">新建配置</span>
+            </button>
+          </div>
+
+          {/* 当前配置编辑区 */}
+          <div className="pt-4 border-t space-y-3">
+            <h4 className="text-sm font-medium">
+              {activeProfileId ? '编辑当前配置' : '快速配置'}
+            </h4>
+            <div className="grid gap-3 sm:grid-cols-2">
+              <div className="space-y-1.5">
+                <label className="text-xs text-muted-foreground">
+                  API Key
+                </label>
                 <Input
                   type="password"
                   placeholder="sk-ant-..."
@@ -168,8 +255,10 @@ export default function ApiKeyCard({
                   className="font-mono text-sm"
                 />
               </div>
-              <div>
-                <label className="text-xs text-muted-foreground">Base URL (ANTHROPIC_BASE_URL)</label>
+              <div className="space-y-1.5">
+                <label className="text-xs text-muted-foreground">
+                  Base URL
+                </label>
                 <Input
                   placeholder="https://api.anthropic.com"
                   value={currentBaseUrl}
@@ -178,10 +267,11 @@ export default function ApiKeyCard({
                 />
               </div>
             </div>
-            <Button variant="outline" size="sm" onClick={handleCreateProfile}>
-              <Plus className="h-4 w-4 mr-1" />
-              保存为档案
-            </Button>
+            {!activeProfileId && profiles.length === 0 && (
+              <p className="text-xs text-muted-foreground">
+                填写后点击上方"新建配置"保存为档案
+              </p>
+            )}
           </div>
         </CardContent>
       </Card>
@@ -190,20 +280,23 @@ export default function ApiKeyCard({
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>{editingProfile ? '编辑配置档案' : '新建配置档案'}</DialogTitle>
+            <DialogTitle>
+              {editingProfile ? '编辑配置档案' : '新建配置档案'}
+            </DialogTitle>
             <DialogDescription>
               {editingProfile
-                ? '修改配置档案的名称和 API 配置'
-                : '将当前配置保存为新的档案，方便快速切换'}
+                ? '修改配置档案的名称和 API 设置'
+                : '创建新的 API 配置档案'}
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-4 py-4">
             <div className="space-y-2">
               <label className="text-sm font-medium">档案名称</label>
               <Input
-                placeholder="如：个人账号、公司账号"
+                placeholder="如：官方 API、代理服务"
                 value={profileName}
                 onChange={(e) => setProfileName(e.target.value)}
+                autoFocus
               />
             </div>
             <div className="space-y-2">
@@ -231,7 +324,7 @@ export default function ApiKeyCard({
               取消
             </Button>
             <Button onClick={handleSaveProfile} disabled={!profileName.trim()}>
-              保存
+              {editingProfile ? '保存修改' : '创建档案'}
             </Button>
           </DialogFooter>
         </DialogContent>
