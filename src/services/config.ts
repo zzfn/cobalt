@@ -93,6 +93,13 @@ export async function switchApiProfile(profileId: string): Promise<void> {
 }
 
 /**
+ * 清除 API 配置（使用官方默认）
+ */
+export async function clearApiConfig(): Promise<void> {
+  await invoke('clear_api_config');
+}
+
+/**
  * 更新环境变量（部分更新）
  */
 export async function updateEnvVars(updates: Record<string, string>): Promise<void> {

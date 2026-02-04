@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Key, Plus, Trash2, Check, Pencil, Globe, Copy } from 'lucide-react';
+import { Key, Plus, Trash2, Check, Pencil, Globe, Copy, Shield } from 'lucide-react';
 import { toast } from 'sonner';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -27,6 +27,7 @@ interface ApiKeyCardProps {
   onBaseUrlChange: (value: string) => void;
   onSwitchProfile: (profileId: string) => void;
   onSaveProfiles: (profiles: ApiKeyProfile[], activeProfileId: string | null) => Promise<void>;
+  onUseOfficialApi: () => Promise<void>;
 }
 
 export default function ApiKeyCard({
@@ -40,6 +41,7 @@ export default function ApiKeyCard({
   onBaseUrlChange,
   onSwitchProfile,
   onSaveProfiles,
+  onUseOfficialApi,
 }: ApiKeyCardProps) {
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editingProfile, setEditingProfile] = useState<ApiKeyProfile | null>(null);
@@ -195,12 +197,55 @@ export default function ApiKeyCard({
             API 配置
           </CardTitle>
           <CardDescription>
-            管理多个 API 配置，点击卡片快速切换
+            管理多个 API 配置，点击卡片快速切换；选择「官方 API」使用默认配置
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
           {/* 配置档案卡片网格 */}
           <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+            {/* 官方 API 卡片 */}
+            <div
+              onClick={async () => {
+                try {
+                  await onUseOfficialApi();
+                } catch (error) {
+                  toast.error('切换到官方 API 失败', {
+                    description: String(error),
+                  });
+                }
+              }}
+              className={cn(
+                'group relative cursor-pointer rounded-lg border-2 p-4 transition-all hover:shadow-md',
+                !activeProfileId && !currentApiKey && !currentBaseUrl
+                  ? 'border-primary bg-primary/5 shadow-sm'
+                  : 'border-transparent bg-muted/50 hover:border-muted-foreground/20'
+              )}
+            >
+              {/* 激活标记 */}
+              {!activeProfileId && !currentApiKey && !currentBaseUrl && (
+                <div className="absolute -top-2 -right-2 rounded-full bg-primary p-1">
+                  <Check className="h-3 w-3 text-primary-foreground" />
+                </div>
+              )}
+
+              {/* 档案名称 */}
+              <div className="mb-3">
+                <h4 className="font-medium truncate">官方 API</h4>
+              </div>
+
+              {/* 描述 */}
+              <div className="space-y-1.5 text-sm">
+                <div className="flex items-center gap-2 text-muted-foreground">
+                  <Shield className="h-3.5 w-3.5 shrink-0" />
+                  <span className="text-xs truncate">使用 Anthropic 官方 API</span>
+                </div>
+                <div className="flex items-center gap-2 text-muted-foreground">
+                  <Globe className="h-3.5 w-3.5 shrink-0" />
+                  <span className="font-mono text-xs truncate">api.anthropic.com</span>
+                </div>
+              </div>
+            </div>
+
             {profiles.map((profile) => {
               const isActive = activeProfileId === profile.id;
               const isDeleting = deleteConfirmId === profile.id;

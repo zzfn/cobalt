@@ -11,6 +11,7 @@ import {
   readApiProfiles,
   writeApiProfiles,
   switchApiProfile,
+  clearApiConfig,
 } from '@/services/config';
 import { logActivity } from '@/lib/activityLogger';
 import type { ClaudeCodeSettings, ApiKeyProfile } from '@/types/settings';
@@ -92,6 +93,20 @@ export default function ClaudeCodeSettings() {
       toast.success('已切换配置档案');
     } catch (error) {
       toast.error('切换配置档案失败', {
+        description: String(error),
+      });
+    }
+  };
+
+  // 使用官方 API（清除自定义配置）
+  const handleUseOfficialApi = async () => {
+    try {
+      await clearApiConfig();
+      // 重新加载配置
+      await loadConfig();
+      toast.success('已切换到官方 API');
+    } catch (error) {
+      toast.error('切换失败', {
         description: String(error),
       });
     }
@@ -200,6 +215,7 @@ export default function ClaudeCodeSettings() {
         onBaseUrlChange={handleBaseUrlChange}
         onSwitchProfile={handleSwitchProfile}
         onSaveProfiles={handleSaveProfiles}
+        onUseOfficialApi={handleUseOfficialApi}
       />
 
       {/* 权限管理 */}
