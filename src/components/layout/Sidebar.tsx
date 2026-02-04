@@ -41,31 +41,24 @@ const navItems: NavItem[] = [
     icon: Sparkles,
   },
   {
-    title: '设置',
-    href: '/settings',
+    title: '通用设置',
+    href: '/settings/general',
     icon: Settings,
-    children: [
-      {
-        title: '通用设置',
-        href: '/settings/general',
-        icon: Settings,
-      },
-      {
-        title: '全局指令',
-        href: '/settings/instructions',
-        icon: FileText,
-      },
-      {
-        title: 'Claude Code',
-        href: '/settings/claude-code',
-        icon: Terminal,
-      },
-      {
-        title: 'settings.json',
-        href: '/settings/settings-json',
-        icon: FileJson,
-      },
-    ],
+  },
+  {
+    title: '全局指令',
+    href: '/settings/instructions',
+    icon: FileText,
+  },
+  {
+    title: 'Claude Code',
+    href: '/settings/claude-code',
+    icon: Terminal,
+  },
+  {
+    title: 'settings.json',
+    href: '/settings/settings-json',
+    icon: FileJson,
   },
 ];
 
@@ -178,7 +171,9 @@ export default function Sidebar() {
 
       {/* 导航 */}
       <nav className="flex-1 space-y-1 overflow-y-auto p-2">
-        {navItems.map((item) => renderNavItem(item))}
+        {navItems.slice(0, 2).map((item) => renderNavItem(item))}
+        <Separator className="my-2" />
+        {navItems.slice(2).map((item) => renderNavItem(item))}
       </nav>
 
       <Separator />
