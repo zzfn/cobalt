@@ -56,3 +56,6 @@ jobs:
           releaseDraft: false
           prerelease: false
           args: --target universal-apple-darwin
+          # 生成 latest.json 用于自动更新
+          updaterJsonPreferNsis: false
+          includeUpdaterJson: true

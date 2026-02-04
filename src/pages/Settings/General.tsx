@@ -1,5 +1,9 @@
 import { useAtom } from 'jotai';
-import { Settings, Sun, Moon, Monitor } from 'lucide-react';
+import { useState } from 'react';
+import { Settings, Sun, Moon, Monitor, RefreshCw } from 'lucide-react';
+import { getVersion } from '@tauri-apps/api/app';
+import { check } from '@tauri-apps/plugin-updater';
+import { toast } from 'sonner';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Switch } from '@/components/ui/switch';
@@ -10,6 +14,40 @@ import { themeAtom } from '@/store/uiAtoms';
 export default function GeneralSettings() {
   const [settings, setSettings] = useAtom(settingsAtom);
   const [theme, setTheme] = useAtom(themeAtom);
+  const [checkingUpdate, setCheckingUpdate] = useState(false);
+  const [currentVersion, setCurrentVersion] = useState<string>('');
+
+  // 获取当前版本
+  useState(() => {
+    getVersion().then(setCurrentVersion).catch(console.error);
+  });
+
+  const handleCheckUpdate = async () => {
+    setCheckingUpdate(true);
+    try {
+      const update = await check();
+
+      if (update?.available) {
+        toast.info('发现新版本', {
+          description: `版本 ${update.version} 可用，请重启应用以更新`,
+          duration: 5000,
+        });
+      } else {
+        toast.success('已是最新版本', {
+          description: currentVersion ? `当前版本 ${currentVersion}` : '当前已是最新版本',
+          duration: 3000,
+        });
+      }
+    } catch (error) {
+      console.error('检查更新失败:', error);
+      toast.error('检查更新失败', {
+        description: error instanceof Error ? error.message : '未知错误',
+        duration: 3000,
+      });
+    } finally {
+      setCheckingUpdate(false);
+    }
+  };
 
   const themeOptions = [
     { value: 'light' as const, label: '浅色', icon: Sun },
@@ -121,6 +159,32 @@ export default function GeneralSettings() {
                 setSettings({ ...settings, autoSave: checked })
               }
             />
+          </div>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>应用更新</CardTitle>
+          <CardDescription>检查并安装应用更新</CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="font-medium">检查更新</p>
+              <p className="text-sm text-muted-foreground">
+                {currentVersion ? `当前版本: v${currentVersion}` : '手动检查应用更新'}
+              </p>
+            </div>
+            <Button
+              variant="outline"
+              onClick={handleCheckUpdate}
+              disabled={checkingUpdate}
+              className="flex items-center gap-2"
+            >
+              <RefreshCw className={`h-4 w-4 ${checkingUpdate ? 'animate-spin' : ''}`} />
+              {checkingUpdate ? '检查中...' : '检查更新'}
+            </Button>
           </div>
         </CardContent>
       </Card>

@@ -1,5 +1,9 @@
 import { NavLink, useLocation } from 'react-router-dom';
 import { useAtom } from 'jotai';
+import { useEffect, useState } from 'react';
+import { getVersion } from '@tauri-apps/api/app';
+import { check } from '@tauri-apps/plugin-updater';
+import { toast } from 'sonner';
 import {
   LayoutDashboard,
   Settings,
@@ -11,6 +15,7 @@ import {
   Moon,
   Terminal,
   FileJson,
+  RefreshCw,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
@@ -29,6 +34,11 @@ const navItems: NavItem[] = [
     title: '仪表板',
     href: '/dashboard',
     icon: LayoutDashboard,
+  },
+  {
+    title: 'Skills',
+    href: '/skills',
+    icon: Sparkles,
   },
   {
     title: '设置',
@@ -57,11 +67,6 @@ const navItems: NavItem[] = [
       },
     ],
   },
-  {
-    title: 'Skills',
-    href: '/skills',
-    icon: Sparkles,
-  },
 ];
 
 export default function Sidebar() {
@@ -69,6 +74,12 @@ export default function Sidebar() {
   const [theme, setTheme] = useAtom(themeAtom);
   const [resolvedTheme] = useAtom(resolvedThemeAtom);
   const location = useLocation();
+  const [version, setVersion] = useState<string>('');
+  const [checkingUpdate, setCheckingUpdate] = useState(false);
+
+  useEffect(() => {
+    getVersion().then(setVersion).catch(console.error);
+  }, []);
 
   const toggleTheme = () => {
     if (theme === 'light') {
@@ -77,6 +88,33 @@ export default function Sidebar() {
       setTheme('system');
     } else {
       setTheme('light');
+    }
+  };
+
+  const handleCheckUpdate = async () => {
+    setCheckingUpdate(true);
+    try {
+      const update = await check();
+
+      if (update?.available) {
+        toast.info('发现新版本', {
+          description: `版本 ${update.version} 可用，请重启应用以更新`,
+          duration: 5000,
+        });
+      } else {
+        toast.success('已是最新版本', {
+          description: `当前版本 ${version}`,
+          duration: 3000,
+        });
+      }
+    } catch (error) {
+      console.error('检查更新失败:', error);
+      toast.error('检查更新失败', {
+        description: error instanceof Error ? error.message : '未知错误',
+        duration: 3000,
+      });
+    } finally {
+      setCheckingUpdate(false);
     }
   };
 
@@ -171,6 +209,26 @@ export default function Sidebar() {
             </>
           )}
         </Button>
+
+        {/* 版本号和检查更新 */}
+        {version && (
+          <div className={cn(
+            'flex items-center gap-2 text-xs text-muted-foreground py-2',
+            collapsed ? 'flex-col px-0' : 'justify-between px-3'
+          )}>
+            <span>{collapsed ? `v${version.split('.')[0]}` : `v${version}`}</span>
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-6 w-6"
+              onClick={handleCheckUpdate}
+              disabled={checkingUpdate}
+              title="检查更新"
+            >
+              <RefreshCw className={cn('h-3 w-3', checkingUpdate && 'animate-spin')} />
+            </Button>
+          </div>
+        )}
       </div>
     </aside>
   );
