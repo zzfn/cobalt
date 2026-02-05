@@ -173,7 +173,6 @@ export default function SkillsList() {
 
   const installedByFilters = [
     { value: 'all', label: '全部', icon: '🤖' },
-    { value: 'cobalt', label: 'Cobalt', icon: '💎' },
     { value: 'claude-code', label: 'Claude Code', icon: '🤖' },
     { value: 'cursor', label: 'Cursor', icon: '⚡' },
     { value: 'codex', label: 'Codex', icon: '🔮' },

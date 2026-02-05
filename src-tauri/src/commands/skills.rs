@@ -15,6 +15,57 @@ fn get_skills_dir() -> Result<PathBuf, String> {
     Ok(get_claude_dir()?.join("skills"))
 }
 
+/// 获取所有 AI Tools 的 skills 目录映射
+/// 返回 Vec<(tool_name, directory_path)>
+/// 目录定义参考 skill-manager 项目
+fn get_all_tool_skills_dirs() -> Vec<(&'static str, PathBuf)> {
+    let mut dirs = Vec::new();
+
+    if let Some(home) = dirs::home_dir() {
+        // Claude Code: ~/.claude/skills/
+        dirs.push(("claude-code", home.join(".claude").join("skills")));
+
+        // Antigravity: ~/.gemini/antigravity/global_skills/
+        dirs.push(("antigravity", home.join(".gemini").join("antigravity").join("global_skills")));
+
+        // OpenCode: ~/.config/opencode/skills/
+        dirs.push(("opencode", home.join(".config").join("opencode").join("skills")));
+
+        // Codex: ~/.codex/skills/
+        dirs.push(("codex", home.join(".codex").join("skills")));
+
+        // Cursor: ~/.cursor/skills/
+        dirs.push(("cursor", home.join(".cursor").join("skills")));
+    }
+
+    dirs
+}
+
+/// 扫描指定目录获取所有 skill 名称
+fn scan_skills_in_dir(dir: &PathBuf) -> Vec<String> {
+    let mut skills = Vec::new();
+
+    if !dir.exists() {
+        return skills;
+    }
+
+    if let Ok(entries) = fs::read_dir(dir) {
+        for entry in entries.flatten() {
+            let path = entry.path();
+            if path.is_dir() {
+                // 检查是否包含 SKILL.md
+                if path.join("SKILL.md").exists() {
+                    if let Some(name) = path.file_name().and_then(|n| n.to_str()) {
+                        skills.push(name.to_string());
+                    }
+                }
+            }
+        }
+    }
+
+    skills
+}
+
 /// Skill 元数据
 #[derive(Debug, Serialize, Deserialize, Clone)]
 #[serde(rename_all = "camelCase")]
@@ -53,7 +104,7 @@ pub struct SkillRegistryEntry {
 }
 
 /// Skill 注册表
-#[derive(Debug, Serialize, Deserialize, Default)]
+#[derive(Debug, Serialize, Deserialize, Default, Clone)]
 #[serde(rename_all = "camelCase")]
 pub struct SkillRegistry {
     #[serde(default)]
@@ -110,11 +161,19 @@ pub struct SkillDetail {
 #[tauri::command]
 pub fn read_skill_md(skill_name: String) -> Result<SkillDetail, String> {
     let skills_dir = get_skills_dir()?;
-    let skill_dir = skills_dir.join(&skill_name);
+    let disabled_skills_dir = get_claude_dir()?.join(".disabled_skills");
 
-    if !skill_dir.exists() {
+    // 尝试从两个目录中查找
+    let enabled_path = skills_dir.join(&skill_name);
+    let disabled_path = disabled_skills_dir.join(&skill_name);
+
+    let (skill_dir, enabled) = if enabled_path.exists() {
+        (enabled_path, true)
+    } else if disabled_path.exists() {
+        (disabled_path, false)
+    } else {
         return Err(format!("Skill '{}' 不存在", skill_name));
-    }
+    };
 
     // 读取 SKILL.md
     let skill_md_path = skill_dir.join("SKILL.md");
@@ -138,7 +197,7 @@ pub fn read_skill_md(skill_name: String) -> Result<SkillDetail, String> {
     // 列出文件
     let files = list_skill_files_internal(&skill_dir)?;
 
-    // 从注册表获取状态
+    // 从注册表获取 installed_by
     let registry = read_skill_registry()?;
     let entry = registry.skills.iter().find(|s| s.name == skill_name);
 
@@ -146,7 +205,7 @@ pub fn read_skill_md(skill_name: String) -> Result<SkillDetail, String> {
         id: entry.map(|e| e.id.clone()).unwrap_or_else(|| skill_name.clone()),
         name: skill_name,
         description: metadata.as_ref().and_then(|m| m.description.clone()),
-        enabled: entry.map(|e| e.enabled).unwrap_or(true),
+        enabled,  // 根据文件位置判断状态
         installed_by: entry.map(|e| e.installed_by.clone()).unwrap_or_else(Vec::new),
         content,
         metadata,
@@ -179,40 +238,98 @@ fn list_skill_files_internal(skill_dir: &PathBuf) -> Result<Vec<String>, String>
 /// 列出 Skill 包含的文件
 #[tauri::command]
 pub fn list_skill_files(skill_name: String) -> Result<Vec<String>, String> {
-    let skill_dir = get_skills_dir()?.join(&skill_name);
+    let skills_dir = get_skills_dir()?;
+    let disabled_skills_dir = get_claude_dir()?.join(".disabled_skills");
 
-    if !skill_dir.exists() {
+    // 尝试从两个目录中查找
+    let enabled_path = skills_dir.join(&skill_name);
+    let disabled_path = disabled_skills_dir.join(&skill_name);
+
+    let skill_dir = if enabled_path.exists() {
+        enabled_path
+    } else if disabled_path.exists() {
+        disabled_path
+    } else {
         return Err(format!("Skill '{}' 不存在", skill_name));
-    }
+    };
 
     list_skill_files_internal(&skill_dir)
 }
 
-/// 启用/禁用 Skill
+/// 启用/禁用 Skill（通过移动文件实现）
 #[tauri::command]
 pub fn toggle_skill(skill_name: String, enabled: bool) -> Result<(), String> {
-    let mut registry = read_skill_registry()?;
+    let skills_dir = get_skills_dir()?;
+    let disabled_skills_dir = get_claude_dir()?.join(".disabled_skills");
 
-    let skill = registry
-        .skills
-        .iter_mut()
-        .find(|s| s.name == skill_name)
-        .ok_or_else(|| format!("Skill '{}' 未在注册表中找到", skill_name))?;
+    // 确保禁用目录存在
+    fs::create_dir_all(&disabled_skills_dir)
+        .map_err(|e| format!("创建 .disabled_skills 目录失败: {}", e))?;
 
-    skill.enabled = enabled;
+    let source_dir = if enabled {
+        // 启用：从 .disabled_skills 移动到 skills
+        disabled_skills_dir.join(&skill_name)
+    } else {
+        // 禁用：从 skills 移动到 .disabled_skills
+        skills_dir.join(&skill_name)
+    };
 
-    write_skill_registry(registry)
+    let target_dir = if enabled {
+        skills_dir.join(&skill_name)
+    } else {
+        disabled_skills_dir.join(&skill_name)
+    };
+
+    // 检查源目录是否存在
+    if !source_dir.exists() {
+        return Err(format!(
+            "Skill '{}' 不存在于 {} 目录",
+            skill_name,
+            if enabled { ".disabled_skills" } else { "skills" }
+        ));
+    }
+
+    // 检查目标目录是否已存在
+    if target_dir.exists() {
+        return Err(format!(
+            "目标位置已存在 skill '{}'",
+            skill_name
+        ));
+    }
+
+    // 移动目录
+    fs::rename(&source_dir, &target_dir)
+        .map_err(|e| format!("移动 skill 目录失败: {}", e))?;
+
+    Ok(())
 }
 
 /// 卸载 Skill
 #[tauri::command]
 pub fn uninstall_skill(skill_name: String) -> Result<(), String> {
     let skills_dir = get_skills_dir()?;
-    let skill_dir = skills_dir.join(&skill_name);
+    let disabled_skills_dir = get_claude_dir()?.join(".disabled_skills");
 
-    // 删除 skill 目录
-    if skill_dir.exists() {
-        fs::remove_dir_all(&skill_dir).map_err(|e| format!("删除 skill 目录失败: {}", e))?;
+    // 尝试从两个目录中删除
+    let enabled_path = skills_dir.join(&skill_name);
+    let disabled_path = disabled_skills_dir.join(&skill_name);
+
+    let mut deleted = false;
+
+    if enabled_path.exists() {
+        fs::remove_dir_all(&enabled_path)
+            .map_err(|e| format!("删除 skill 目录失败: {}", e))?;
+        deleted = true;
+    }
+
+    if disabled_path.exists() {
+        fs::remove_dir_all(&disabled_path)
+            .map_err(|e| format!("删除 skill 目录失败: {}", e))?;
+        deleted = true;
+    }
+
+    if !deleted {
+        return Err(format!("Skill '{}' 不存在", skill_name));
     }
 
     // 从注册表中移除
@@ -223,58 +340,144 @@ pub fn uninstall_skill(skill_name: String) -> Result<(), String> {
     Ok(())
 }
 
-/// 获取所有已安装的 Skills（扫描目录）
+/// 获取所有已安装的 Skills（扫描多个 AI Tools 目录）
 #[tauri::command]
 pub fn list_installed_skills() -> Result<Vec<SkillRegistryEntry>, String> {
     let skills_dir = get_skills_dir()?;
+    let disabled_skills_dir = get_claude_dir()?.join(".disabled_skills");
 
-    if !skills_dir.exists() {
-        return Ok(Vec::new());
+    // 首先扫描所有 AI Tools 的目录，建立 skill -> tools 映射
+    let tool_dirs = get_all_tool_skills_dirs();
+    let mut skill_to_tools: std::collections::HashMap<String, Vec<String>> = std::collections::HashMap::new();
+
+    for (tool_name, tool_dir) in &tool_dirs {
+        let tool_skills = scan_skills_in_dir(tool_dir);
+        for skill_name in tool_skills {
+            skill_to_tools
+                .entry(skill_name)
+                .or_insert_with(Vec::new)
+                .push(tool_name.to_string());
+        }
     }
 
     let mut skills = Vec::new();
     let registry = read_skill_registry()?;
 
-    let entries = fs::read_dir(&skills_dir)
-        .map_err(|e| format!("读取 skills 目录失败: {}", e))?;
+    // 扫描启用的 skills 目录
+    if skills_dir.exists() {
+        let entries = fs::read_dir(&skills_dir)
+            .map_err(|e| format!("读取 skills 目录失败: {}", e))?;
 
-    for entry in entries {
-        if let Ok(entry) = entry {
-            let path = entry.path();
-            if path.is_dir() {
-                if let Some(name) = path.file_name() {
-                    let skill_name = name.to_string_lossy().to_string();
+        for entry in entries {
+            if let Ok(entry) = entry {
+                let path = entry.path();
+                if path.is_dir() {
+                    if let Some(name) = path.file_name() {
+                        let skill_name = name.to_string_lossy().to_string();
 
-                    // 跳过 skill-registry.json 所在的目录
-                    if skill_name == "skill-registry.json" {
-                        continue;
-                    }
+                        // 跳过 skill-registry.json 所在的目录
+                        if skill_name == "skill-registry.json" {
+                            continue;
+                        }
 
-                    // 从注册表查找或创建新条目
-                    let existing = registry.skills.iter().find(|s| s.name == skill_name);
+                        // 从注册表查找或创建新条目
+                        let existing = registry.skills.iter().find(|s| s.name == skill_name);
 
-                    if let Some(entry) = existing {
-                        skills.push(entry.clone());
-                    } else {
-                        // 尝试读取 metadata
-                        let metadata_path = path.join("metadata.json");
-                        let metadata: Option<SkillMetadata> = if metadata_path.exists() {
-                            fs::read_to_string(&metadata_path)
-                                .ok()
-                                .and_then(|c| serde_json::from_str(&c).ok())
+                        // 自动检测该 skill 被哪些 tools 安装
+                        let installed_by = skill_to_tools
+                            .get(&skill_name)
+                            .cloned()
+                            .unwrap_or_else(Vec::new);
+
+                        if let Some(entry) = existing {
+                            let mut skill_entry = entry.clone();
+                            skill_entry.enabled = true;  // 在 skills/ 目录 = 启用
+                            // 合并自动检测到的 tools（去重）
+                            for tool in installed_by {
+                                if !skill_entry.installed_by.contains(&tool) {
+                                    skill_entry.installed_by.push(tool);
+                                }
+                            }
+                            skills.push(skill_entry);
                         } else {
-                            None
-                        };
+                            // 尝试读取 metadata
+                            let metadata_path = path.join("metadata.json");
+                            let metadata: Option<SkillMetadata> = if metadata_path.exists() {
+                                fs::read_to_string(&metadata_path)
+                                    .ok()
+                                    .and_then(|c| serde_json::from_str(&c).ok())
+                            } else {
+                                None
+                            };
 
-                        skills.push(SkillRegistryEntry {
-                            id: skill_name.clone(),
-                            name: skill_name.clone(),
-                            description: metadata.as_ref().and_then(|m| m.description.clone()),
-                            enabled: true,
-                            installed_by: Vec::new(),
-                            installed_at: None,
-                            metadata,
-                        });
+                            skills.push(SkillRegistryEntry {
+                                id: skill_name.clone(),
+                                name: skill_name.clone(),
+                                description: metadata.as_ref().and_then(|m| m.description.clone()),
+                                enabled: true,
+                                installed_by,
+                                installed_at: None,
+                                metadata,
+                            });
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    // 扫描禁用的 skills 目录
+    if disabled_skills_dir.exists() {
+        let entries = fs::read_dir(&disabled_skills_dir)
+            .map_err(|e| format!("读取 .disabled_skills 目录失败: {}", e))?;
+
+        for entry in entries {
+            if let Ok(entry) = entry {
+                let path = entry.path();
+                if path.is_dir() {
+                    if let Some(name) = path.file_name() {
+                        let skill_name = name.to_string_lossy().to_string();
+
+                        // 从注册表查找或创建新条目
+                        let existing = registry.skills.iter().find(|s| s.name == skill_name);
+
+                        // 自动检测该 skill 被哪些 tools 安装
+                        let installed_by = skill_to_tools
+                            .get(&skill_name)
+                            .cloned()
+                            .unwrap_or_else(Vec::new);
+
+                        if let Some(entry) = existing {
+                            let mut skill_entry = entry.clone();
+                            skill_entry.enabled = false;  // 在 .disabled_skills/ 目录 = 禁用
+                            // 合并自动检测到的 tools（去重）
+                            for tool in installed_by {
+                                if !skill_entry.installed_by.contains(&tool) {
+                                    skill_entry.installed_by.push(tool);
+                                }
+                            }
+                            skills.push(skill_entry);
+                        } else {
+                            // 尝试读取 metadata
+                            let metadata_path = path.join("metadata.json");
+                            let metadata: Option<SkillMetadata> = if metadata_path.exists() {
+                                fs::read_to_string(&metadata_path)
+                                    .ok()
+                                    .and_then(|c| serde_json::from_str(&c).ok())
+                            } else {
+                                None
+                            };
+
+                            skills.push(SkillRegistryEntry {
+                                id: skill_name.clone(),
+                                name: skill_name.clone(),
+                                description: metadata.as_ref().and_then(|m| m.description.clone()),
+                                enabled: false,
+                                installed_by,
+                                installed_at: None,
+                                metadata,
+                            });
+                        }
                     }
                 }
             }
@@ -504,8 +707,8 @@ fn install_single_skill(
     // 检查是否已存在该 skill
     if let Some(existing) = registry.skills.iter_mut().find(|s| s.name == skill_name) {
         // 已存在，更新安装工具列表
-        if !existing.installed_by.contains(&"cobalt".to_string()) {
-            existing.installed_by.push("cobalt".to_string());
+        if !existing.installed_by.contains(&"claude-code".to_string()) {
+            existing.installed_by.push("claude-code".to_string());
         }
         existing.installed_at = Some(now);
         if metadata.is_some() {
@@ -518,7 +721,7 @@ fn install_single_skill(
             name: skill_name.to_string(),
             description: metadata.as_ref().and_then(|m| m.description.clone()),
             enabled: true,
-            installed_by: vec!["cobalt".to_string()],
+            installed_by: vec!["claude-code".to_string()],
             installed_at: Some(now),
             metadata,
         });
@@ -659,7 +862,7 @@ pub fn create_skill(params: CreateSkillParams) -> Result<String, String> {
         name: params.name.clone(),
         description: params.description.clone(),
         enabled: true,
-        installed_by: vec!["cobalt".to_string()],
+        installed_by: vec!["claude-code".to_string()],
         installed_at: Some(now),
         metadata: Some(SkillMetadata {
             name: params.name.clone(),
