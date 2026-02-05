@@ -1,4 +1,6 @@
 // Cobalt - Claude 配置管理工具
+#![allow(unexpected_cfgs)]
+
 mod commands;
 
 use commands::{
