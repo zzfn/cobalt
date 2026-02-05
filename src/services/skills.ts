@@ -8,7 +8,7 @@ interface BackendSkillEntry {
   name: string;
   description?: string;
   enabled: boolean;
-  source: string;
+  installedBy?: string[];
   installedAt?: string;
   metadata?: {
     name: string;
@@ -27,7 +27,7 @@ interface BackendSkillDetail {
   name: string;
   description?: string;
   enabled: boolean;
-  source: string;
+  installedBy?: string[];
   content: string;
   metadata?: {
     name: string;
@@ -48,7 +48,7 @@ function toSkillRegistryEntry(entry: BackendSkillEntry): SkillRegistryEntry {
     name: entry.name,
     description: entry.description || entry.metadata?.description || '',
     enabled: entry.enabled,
-    source: (entry.source as 'local' | 'remote' | 'builtin') || 'local',
+    installedBy: entry.installedBy as any,
     metadata: {
       name: entry.metadata?.name || entry.name,
       version: entry.metadata?.version || '0.0.0',
@@ -66,7 +66,7 @@ function toSkillDetail(detail: BackendSkillDetail): SkillDetail {
     name: detail.name,
     description: detail.description || detail.metadata?.description || '',
     enabled: detail.enabled,
-    source: (detail.source as 'local' | 'remote' | 'builtin') || 'local',
+    installedBy: detail.installedBy as any,
     content: detail.content,
     metadata: {
       name: detail.metadata?.name || detail.name,
@@ -135,4 +135,23 @@ export async function installSkillFromRepo(repoUrl: string): Promise<string> {
     console.error('❌ [Service] 安装失败:', error);
     throw error;
   }
+}
+
+/**
+ * 创建新 Skill 的参数
+ */
+export interface CreateSkillParams {
+  name: string;
+  description?: string;
+  userInvocable?: boolean;
+  allowedTools?: string;
+  argumentHint?: string;
+  template?: 'basic' | 'tool-calling' | 'agent';
+}
+
+/**
+ * 创建新 Skill
+ */
+export async function createSkill(params: CreateSkillParams): Promise<string> {
+  return invoke<string>('create_skill', { params });
 }

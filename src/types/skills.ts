@@ -3,7 +3,7 @@
 /**
  * 支持的 AI 工具类型
  */
-export type AiToolType = 'claude-code' | 'cursor' | 'codex' | 'opencode' | 'antigravity';
+export type AiToolType = 'claude-code' | 'cursor' | 'codex' | 'opencode' | 'antigravity' | 'cobalt';
 
 /**
  * AI 工具元信息
@@ -49,6 +49,12 @@ export const AI_TOOL_META: Record<AiToolType, AiToolMeta> = {
     displayName: 'Antigravity',
     icon: '🚀',
   },
+  'cobalt': {
+    id: 'cobalt',
+    name: 'cobalt',
+    displayName: 'Cobalt',
+    icon: '💎',
+  },
 };
 
 /**
@@ -73,7 +79,7 @@ export interface SkillRegistryEntry {
   name: string;
   description: string;
   enabled: boolean;
-  source: 'local' | 'remote' | 'builtin';
+  installedBy?: AiToolType[];  // 记录被哪些 AI 工具安装
   path?: string;
   url?: string;
   metadata: SkillMetadata;
@@ -104,7 +110,7 @@ export interface SkillExample {
  */
 export interface SkillFilter {
   search?: string;
-  source?: 'all' | 'local' | 'remote' | 'builtin';
+  installedBy?: AiToolType | 'all';  // 按安装工具过滤
   targetTool?: AiToolType | 'all';  // 按 AI 工具过滤
   enabled?: boolean;
   tags?: string[];

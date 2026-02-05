@@ -45,7 +45,7 @@ pub struct SkillRegistryEntry {
     #[serde(default)]
     pub enabled: bool,
     #[serde(default)]
-    pub source: String,
+    pub installed_by: Vec<String>,  // 记录被哪些 AI 工具安装
     #[serde(default)]
     pub installed_at: Option<String>,
     #[serde(default)]
@@ -99,7 +99,8 @@ pub struct SkillDetail {
     pub name: String,
     pub description: Option<String>,
     pub enabled: bool,
-    pub source: String,
+    #[serde(default)]
+    pub installed_by: Vec<String>,
     pub content: String,
     pub metadata: Option<SkillMetadata>,
     pub files: Vec<String>,
@@ -146,7 +147,7 @@ pub fn read_skill_md(skill_name: String) -> Result<SkillDetail, String> {
         name: skill_name,
         description: metadata.as_ref().and_then(|m| m.description.clone()),
         enabled: entry.map(|e| e.enabled).unwrap_or(true),
-        source: entry.map(|e| e.source.clone()).unwrap_or_else(|| "local".to_string()),
+        installed_by: entry.map(|e| e.installed_by.clone()).unwrap_or_else(Vec::new),
         content,
         metadata,
         files,
@@ -270,7 +271,7 @@ pub fn list_installed_skills() -> Result<Vec<SkillRegistryEntry>, String> {
                             name: skill_name.clone(),
                             description: metadata.as_ref().and_then(|m| m.description.clone()),
                             enabled: true,
-                            source: "local".to_string(),
+                            installed_by: Vec::new(),
                             installed_at: None,
                             metadata,
                         });
@@ -500,15 +501,28 @@ fn install_single_skill(
 
     let now = chrono::Utc::now().to_rfc3339();
 
-    registry.skills.push(SkillRegistryEntry {
-        id: skill_name.to_string(),
-        name: skill_name.to_string(),
-        description: metadata.as_ref().and_then(|m| m.description.clone()),
-        enabled: true,
-        source: "remote".to_string(),
-        installed_at: Some(now),
-        metadata,
-    });
+    // 检查是否已存在该 skill
+    if let Some(existing) = registry.skills.iter_mut().find(|s| s.name == skill_name) {
+        // 已存在，更新安装工具列表
+        if !existing.installed_by.contains(&"cobalt".to_string()) {
+            existing.installed_by.push("cobalt".to_string());
+        }
+        existing.installed_at = Some(now);
+        if metadata.is_some() {
+            existing.metadata = metadata;
+        }
+    } else {
+        // 新安装
+        registry.skills.push(SkillRegistryEntry {
+            id: skill_name.to_string(),
+            name: skill_name.to_string(),
+            description: metadata.as_ref().and_then(|m| m.description.clone()),
+            enabled: true,
+            installed_by: vec!["cobalt".to_string()],
+            installed_at: Some(now),
+            metadata,
+        });
+    }
 
     write_skill_registry(registry)
         .map_err(|e| format!("写入注册表失败: {}", e))?;
@@ -599,4 +613,166 @@ fn parse_skill_frontmatter(content: &str, default_name: &str) -> Option<SkillMet
         repository: None,
         commit_hash: None,
     })
+}
+
+/// 创建 Skill 的参数
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CreateSkillParams {
+    pub name: String,
+    pub description: Option<String>,
+    pub user_invocable: Option<bool>,
+    pub allowed_tools: Option<String>,
+    pub argument_hint: Option<String>,
+    pub template: Option<String>, // "basic", "tool-calling", "agent"
+}
+
+/// 创建新 Skill
+#[tauri::command]
+pub fn create_skill(params: CreateSkillParams) -> Result<String, String> {
+    let skills_dir = get_skills_dir()?;
+    let skill_dir = skills_dir.join(&params.name);
+
+    // 检查是否已存在
+    if skill_dir.exists() {
+        return Err(format!("Skill '{}' 已存在", params.name));
+    }
+
+    // 创建目录
+    fs::create_dir_all(&skill_dir)
+        .map_err(|e| format!("创建 skill 目录失败: {}", e))?;
+
+    // 生成 SKILL.md 内容
+    let skill_content = generate_skill_md(&params)?;
+
+    // 写入 SKILL.md
+    let skill_md_path = skill_dir.join("SKILL.md");
+    fs::write(&skill_md_path, skill_content)
+        .map_err(|e| format!("写入 SKILL.md 失败: {}", e))?;
+
+    // 添加到注册表
+    let mut registry = read_skill_registry()?;
+    let now = chrono::Utc::now().to_rfc3339();
+
+    registry.skills.push(SkillRegistryEntry {
+        id: params.name.clone(),
+        name: params.name.clone(),
+        description: params.description.clone(),
+        enabled: true,
+        installed_by: vec!["cobalt".to_string()],
+        installed_at: Some(now),
+        metadata: Some(SkillMetadata {
+            name: params.name.clone(),
+            version: Some("0.1.0".to_string()),
+            description: params.description,
+            tags: Vec::new(),
+            target_tools: Vec::new(),
+            repository: None,
+            commit_hash: None,
+        }),
+    });
+
+    write_skill_registry(registry)?;
+
+    Ok(format!("Skill '{}' 创建成功", params.name))
+}
+
+/// 生成 SKILL.md 内容
+fn generate_skill_md(params: &CreateSkillParams) -> Result<String, String> {
+    let template = params.template.as_deref().unwrap_or("basic");
+
+    // 生成 frontmatter
+    let mut frontmatter = format!("---\nname: {}\n", params.name);
+    if let Some(desc) = &params.description {
+        frontmatter.push_str(&format!("description: {}\n", desc));
+    }
+    if let Some(invocable) = params.user_invocable {
+        frontmatter.push_str(&format!("user-invocable: {}\n", invocable));
+    }
+    if let Some(tools) = &params.allowed_tools {
+        frontmatter.push_str(&format!("allowed-tools: {}\n", tools));
+    }
+    if let Some(hint) = &params.argument_hint {
+        frontmatter.push_str(&format!("argument-hint: {}\n", hint));
+    }
+    frontmatter.push_str("---\n\n");
+
+    // 根据模板生成内容
+    let content = match template {
+        "basic" => generate_basic_template(&params.name),
+        "tool-calling" => generate_tool_calling_template(&params.name),
+        "agent" => generate_agent_template(&params.name),
+        _ => generate_basic_template(&params.name),
+    };
+
+    Ok(format!("{}{}", frontmatter, content))
+}
+
+/// 生成基础模板
+fn generate_basic_template(name: &str) -> String {
+    format!(r#"# {}
+
+## 描述
+
+这是一个新创建的 Skill。
+
+## 使用方法
+
+调用此 Skill：
+```
+/{} [参数]
+```
+
+## 功能
+
+- 功能 1
+- 功能 2
+- 功能 3
+"#, name, name)
+}
+
+/// 生成工具调用模板
+fn generate_tool_calling_template(name: &str) -> String {
+    format!(r#"# {}
+
+## 描述
+
+这是一个工具调用型 Skill，可以使用 Claude Code 的工具。
+
+## 可用工具
+
+- Read：读取文件
+- Write：写入文件
+- Bash：执行命令
+- Grep：搜索内容
+- Glob：查找文件
+
+## 使用方法
+
+```
+/{} [参数]
+```
+"#, name, name)
+}
+
+/// 生成代理模板
+fn generate_agent_template(name: &str) -> String {
+    format!(r#"# {}
+
+## 描述
+
+这是一个代理型 Skill，可以启动子代理执行复杂任务。
+
+## 配置
+
+- context: fork
+- agent: general-purpose
+- allowed-tools: Read, Write, Bash, Grep, Glob
+
+## 使用方法
+
+```
+/{} [任务描述]
+```
+"#, name, name)
 }

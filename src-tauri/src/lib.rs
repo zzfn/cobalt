@@ -7,8 +7,8 @@ use commands::{
     read_conversation_history, read_settings, switch_api_profile, update_env_vars,
     write_api_profiles, write_claude_md, write_settings,
     // Skills 命令
-    install_skill_from_repo, list_installed_skills, list_skill_files, read_skill_md,
-    read_skill_registry, toggle_skill, uninstall_skill, write_skill_registry,
+    create_skill, install_skill_from_repo, list_installed_skills, list_skill_files,
+    read_skill_md, read_skill_registry, toggle_skill, uninstall_skill, write_skill_registry,
 };
 
 #[cfg(target_os = "macos")]
@@ -90,6 +90,7 @@ pub fn run() {
             uninstall_skill,
             list_installed_skills,
             install_skill_from_repo,
+            create_skill,
             // 窗口主题
             set_window_theme,
         ])

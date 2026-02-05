@@ -108,8 +108,12 @@ export async function getDashboardStats(): Promise<DashboardStats> {
       total: skills.length,
       enabled: skills.filter(s => s.enabled).length,
       disabled: skills.filter(s => !s.enabled).length,
-      bySource: skills.reduce((acc, s) => {
-        acc[s.source] = (acc[s.source] || 0) + 1;
+      byInstalledBy: skills.reduce((acc, s) => {
+        if (s.installedBy) {
+          s.installedBy.forEach(tool => {
+            acc[tool] = (acc[tool] || 0) + 1;
+          });
+        }
         return acc;
       }, {} as Record<string, number>),
     },

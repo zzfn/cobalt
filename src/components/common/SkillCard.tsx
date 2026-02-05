@@ -1,8 +1,20 @@
 import { Link } from 'react-router-dom';
-import { Sparkles, ExternalLink } from 'lucide-react';
+import { Sparkles, ExternalLink, Trash2 } from 'lucide-react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Switch } from '@/components/ui/switch';
+import { Button } from '@/components/ui/button';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from '@/components/ui/alert-dialog';
 import { cn } from '@/lib/utils';
 import type { SkillRegistryEntry } from '@/types/skills';
 import { AI_TOOL_META } from '@/types/skills';
@@ -10,22 +22,11 @@ import { AI_TOOL_META } from '@/types/skills';
 interface SkillCardProps {
   skill: SkillRegistryEntry;
   onToggle?: (enabled: boolean) => void;
+  onDelete?: () => void;
   className?: string;
 }
 
-export default function SkillCard({ skill, onToggle, className }: SkillCardProps) {
-  const sourceLabels: Record<string, string> = {
-    local: '本地',
-    remote: '远程',
-    builtin: '内置',
-  };
-
-  const sourceColors: Record<string, string> = {
-    local: 'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200',
-    remote: 'bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-200',
-    builtin: 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200',
-  };
-
+export default function SkillCard({ skill, onToggle, onDelete, className }: SkillCardProps) {
   return (
     <Card className={cn('group relative transition-shadow hover:shadow-md', className)}>
       <CardHeader className="pb-3">
@@ -41,19 +42,49 @@ export default function SkillCard({ skill, onToggle, className }: SkillCardProps
               </Link>
             </CardTitle>
           </div>
-          <Switch
-            checked={skill.enabled}
-            onCheckedChange={onToggle}
-            aria-label={`${skill.enabled ? '禁用' : '启用'} ${skill.name}`}
-          />
+          <div className="flex items-center gap-2">
+            {onDelete && (
+              <AlertDialog>
+                <AlertDialogTrigger asChild>
+                  <Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground hover:text-destructive">
+                    <Trash2 className="h-4 w-4" />
+                  </Button>
+                </AlertDialogTrigger>
+                <AlertDialogContent>
+                  <AlertDialogHeader>
+                    <AlertDialogTitle>确认删除</AlertDialogTitle>
+                    <AlertDialogDescription>
+                      确定要删除 Skill "{skill.name}" 吗？此操作无法撤销。
+                    </AlertDialogDescription>
+                  </AlertDialogHeader>
+                  <AlertDialogFooter>
+                    <AlertDialogCancel>取消</AlertDialogCancel>
+                    <AlertDialogAction onClick={onDelete} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
+                      删除
+                    </AlertDialogAction>
+                  </AlertDialogFooter>
+                </AlertDialogContent>
+              </AlertDialog>
+            )}
+            <Switch
+              checked={skill.enabled}
+              onCheckedChange={onToggle}
+              aria-label={`${skill.enabled ? '禁用' : '启用'} ${skill.name}`}
+            />
+          </div>
         </div>
         <CardDescription className="line-clamp-2">{skill.description}</CardDescription>
       </CardHeader>
       <CardContent>
         <div className="flex flex-wrap items-center gap-2">
-          <Badge variant="secondary" className={cn('text-xs', sourceColors[skill.source])}>
-            {sourceLabels[skill.source]}
-          </Badge>
+          {skill.installedBy && skill.installedBy.length > 0 && (
+            <Badge variant="secondary" className="text-xs bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200">
+              安装自: {skill.installedBy.map(tool => {
+                const toolMeta = AI_TOOL_META[tool as keyof typeof AI_TOOL_META];
+                return toolMeta ? `${toolMeta.icon} ${toolMeta.displayName}` : tool;
+              }).join(', ')}
+            </Badge>
+          )}
           {skill.metadata.version && (
             <Badge variant="outline" className="text-xs">
               v{skill.metadata.version}
