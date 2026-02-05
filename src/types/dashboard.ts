@@ -9,6 +9,7 @@ export interface DashboardStats {
     enabled: number;
     disabled: number;
     bySource: Record<string, number>;
+    byInstalledBy: Record<string, number>;
   };
   profiles: {
     total: number;

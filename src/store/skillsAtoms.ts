@@ -4,6 +4,7 @@ import type {
   SkillDetail,
   SkillFilter,
   SkillSortOption,
+  AiToolType,
 } from '@/types/skills';
 
 // Skills 列表
@@ -53,7 +54,7 @@ export const filteredSkillsAtom = atom((get) => {
   // 安装工具过滤
   if (filter.installedBy && filter.installedBy !== 'all') {
     filtered = filtered.filter((skill) =>
-      skill.installedBy?.includes(filter.installedBy as string)
+      skill.installedBy?.includes(filter.installedBy as AiToolType)
     );
   }
 

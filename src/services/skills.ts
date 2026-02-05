@@ -1,6 +1,28 @@
 // Skills 服务 - 封装 Tauri 后端调用
 import { invoke } from '@tauri-apps/api/core';
-import type { SkillRegistryEntry, SkillDetail } from '@/types/skills';
+import type { SkillRegistryEntry, SkillDetail, SkillUpdateCheckResult } from '@/types/skills';
+
+/**
+ * 解析格式化的 skill 字符串
+ * 例如: "name: commit-work description: \"Create high-quality...\""
+ */
+function parseSkillField(value: string | undefined): string {
+  if (!value) return '';
+
+  // 匹配格式: name: xxx description: "yyy" 或 description: "xxx"
+  const nameMatch = value.match(/name:\s*(\S+?)(?:\s+description:|$)/);
+  const descMatch = value.match(/description:\s*"([^"]*)"|description:\s*(\S+)/);
+
+  if (nameMatch) {
+    return nameMatch[1];
+  }
+  if (descMatch) {
+    return descMatch[1] || descMatch[2];
+  }
+
+  // 如果没有匹配到格式，直接返回原值
+  return value;
+}
 
 // 后端返回的 Skill 注册表条目类型
 interface BackendSkillEntry {
@@ -43,37 +65,48 @@ interface BackendSkillDetail {
 
 // 转换后端数据为前端类型
 function toSkillRegistryEntry(entry: BackendSkillEntry): SkillRegistryEntry {
+  const parsedName = parseSkillField(entry.name);
+  const parsedDesc = parseSkillField(entry.description || entry.metadata?.description);
+
   return {
     id: entry.id,
-    name: entry.name,
-    description: entry.description || entry.metadata?.description || '',
+    name: parsedName,
+    description: parsedDesc,
     enabled: entry.enabled,
     installedBy: entry.installedBy as any,
+    url: entry.metadata?.repository,
     metadata: {
       name: entry.metadata?.name || entry.name,
       version: entry.metadata?.version || '0.0.0',
       description: entry.metadata?.description || entry.description || '',
       tags: entry.metadata?.tags || [],
       targetTools: entry.metadata?.targetTools as any,
+      repository: entry.metadata?.repository,
     },
   };
 }
 
 // 转换后端详情为前端类型
 function toSkillDetail(detail: BackendSkillDetail): SkillDetail {
+  const parsedName = parseSkillField(detail.name);
+  const parsedDesc = parseSkillField(detail.description || detail.metadata?.description);
+
   return {
     id: detail.id,
-    name: detail.name,
-    description: detail.description || detail.metadata?.description || '',
+    name: parsedName,
+    description: parsedDesc,
     enabled: detail.enabled,
     installedBy: detail.installedBy as any,
+    url: detail.metadata?.repository,
     content: detail.content,
+    files: detail.files,
     metadata: {
       name: detail.metadata?.name || detail.name,
       version: detail.metadata?.version || '0.0.0',
       description: detail.metadata?.description || detail.description || '',
       tags: detail.metadata?.tags || [],
       targetTools: detail.metadata?.targetTools as any,
+      repository: detail.metadata?.repository,
     },
   };
 }
@@ -121,14 +154,39 @@ export async function listSkillFiles(skillName: string): Promise<string[]> {
 }
 
 /**
- * 从远程仓库安装 Skill
+ * 读取 Skill 中的指定文件内容
  */
-export async function installSkillFromRepo(repoUrl: string): Promise<string> {
-  console.log('📡 [Service] installSkillFromRepo 被调用');
+export async function readSkillFile(skillName: string, filePath: string): Promise<string> {
+  return invoke<string>('read_skill_file', { skillName, filePath });
+}
+
+/**
+ * 扫描远程仓库中的 Skills（不安装）
+ */
+export async function scanRepoSkills(repoUrl: string): Promise<import('@/types/skills').ScannedSkillInfo[]> {
+  console.log('🔍 [Service] scanRepoSkills 被调用');
   console.log('📦 [Service] 仓库 URL:', repoUrl);
 
   try {
-    const result = await invoke<string>('install_skill_from_repo', { repoUrl });
+    const result = await invoke<import('@/types/skills').ScannedSkillInfo[]>('scan_repo_skills', { repoUrl });
+    console.log('✅ [Service] 扫描成功:', result);
+    return result;
+  } catch (error) {
+    console.error('❌ [Service] 扫描失败:', error);
+    throw error;
+  }
+}
+
+/**
+ * 从远程仓库安装 Skill（支持选择性安装）
+ */
+export async function installSkillFromRepo(repoUrl: string, skillNames?: string[]): Promise<string> {
+  console.log('📡 [Service] installSkillFromRepo 被调用');
+  console.log('📦 [Service] 仓库 URL:', repoUrl);
+  console.log('📝 [Service] 指定安装:', skillNames);
+
+  try {
+    const result = await invoke<string>('install_skill_from_repo', { repoUrl, skillNames });
     console.log('✅ [Service] 安装成功:', result);
     return result;
   } catch (error) {
@@ -154,4 +212,25 @@ export interface CreateSkillParams {
  */
 export async function createSkill(params: CreateSkillParams): Promise<string> {
   return invoke<string>('create_skill', { params });
+}
+
+/**
+ * 检查 Skill 是否有更新
+ */
+export async function checkSkillUpdate(skillName: string): Promise<SkillUpdateCheckResult> {
+  return invoke<SkillUpdateCheckResult>('check_skill_update', { skillName });
+}
+
+/**
+ * 更新 Skill 到最新版本
+ */
+export async function updateSkill(skillName: string): Promise<string> {
+  return invoke<string>('update_skill', { skillName });
+}
+
+/**
+ * 设置 Skill 的仓库地址
+ */
+export async function setSkillRepository(skillName: string, repository: string): Promise<void> {
+  return invoke<void>('set_skill_repository', { skillName, repository });
 }

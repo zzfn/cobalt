@@ -61,6 +61,7 @@ export interface SkillMetadata {
   author?: string;
   tags?: string[];
   targetTools?: AiToolType[];  // 该 Skill 适用的 AI 工具
+  repository?: string;  // 仓库 URL
   createdAt?: string;
   updatedAt?: string;
 }
@@ -87,6 +88,7 @@ export interface SkillDetail extends SkillRegistryEntry {
   readme?: string;
   dependencies?: string[];
   examples?: SkillExample[];
+  files?: string[];  // Skill 目录下的所有文件列表
 }
 
 /**
@@ -97,6 +99,25 @@ export interface SkillExample {
   description?: string;
   input: string;
   output?: string;
+}
+
+/**
+ * Skill 清单文件 (.manifest.json)
+ */
+export interface SkillManifest {
+  version: string;
+  name: string;
+  description?: string;
+  /** 仓库 URL，用于更新检测 */
+  repository?: string;
+  /** 文件列表，包含 hash 和 size */
+  files: {
+    path: string;
+    hash: string;
+    size: number;
+  }[];
+  /** 生成时间 */
+  generatedAt: string;
 }
 
 /**
@@ -116,6 +137,26 @@ export interface SkillFilter {
 export type SkillSortOption = 'name' | 'updatedAt' | 'createdAt';
 
 /**
+ * Skill 更新检查结果
+ */
+export interface SkillUpdateCheckResult {
+  hasUpdate: boolean;
+  currentVersion?: string;
+  latestVersion?: string;
+  /** 是否有仓库信息 */
+  hasRepository: boolean;
+  /** 是否有清单文件 */
+  hasManifest: boolean;
+  /** 变更的文件列表 */
+  changedFiles?: string[];
+  /** 新增的文件列表 */
+  newFiles?: string[];
+  /** 删除的文件列表 */
+  removedFiles?: string[];
+  error?: string;
+}
+
+/**
  * Skill 列表状态
  */
 export interface SkillListState {
@@ -125,4 +166,14 @@ export interface SkillListState {
   sortOrder: 'asc' | 'desc';
   loading: boolean;
   error?: string;
+}
+
+/**
+ * 扫描到的 Skill 信息
+ */
+export interface ScannedSkillInfo {
+  name: string;
+  description?: string;
+  version?: string;
+  alreadyInstalled: boolean;
 }

@@ -85,16 +85,20 @@ export default function SkillCard({ skill, onToggle, onDelete, className }: Skil
               }).join(', ')}
             </Badge>
           )}
-          {skill.metadata.targetTools?.map((toolType) => (
-            <Badge
-              key={toolType}
-              variant="outline"
-              className="text-xs"
-              title={`适用于 ${AI_TOOL_META[toolType].displayName}`}
-            >
-              {AI_TOOL_META[toolType].icon} {AI_TOOL_META[toolType].displayName}
-            </Badge>
-          ))}
+          {skill.metadata.targetTools?.map((toolType) => {
+            const toolMeta = AI_TOOL_META[toolType as keyof typeof AI_TOOL_META];
+            if (!toolMeta) return null;
+            return (
+              <Badge
+                key={toolType}
+                variant="outline"
+                className="text-xs"
+                title={`适用于 ${toolMeta.displayName}`}
+              >
+                {toolMeta.icon} {toolMeta.displayName}
+              </Badge>
+            );
+          })}
           {skill.metadata.tags?.slice(0, 3).map((tag) => (
             <Badge key={tag} variant="outline" className="text-xs">
               {tag}

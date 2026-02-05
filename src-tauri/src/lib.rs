@@ -9,8 +9,9 @@ use commands::{
     read_conversation_history, read_settings, switch_api_profile, update_env_vars,
     write_api_profiles, write_claude_md, write_settings,
     // Skills 命令
-    create_skill, install_skill_from_repo, list_installed_skills, list_skill_files,
-    read_skill_md, read_skill_registry, toggle_skill, uninstall_skill, write_skill_registry,
+    check_skill_update, create_skill, install_skill_from_repo, list_installed_skills,
+    list_skill_files, read_skill_file, read_skill_md, read_skill_registry, scan_repo_skills,
+    set_skill_repository, toggle_skill, uninstall_skill, update_skill, write_skill_registry,
 };
 
 #[cfg(target_os = "macos")]
@@ -87,12 +88,17 @@ pub fn run() {
             read_skill_registry,
             write_skill_registry,
             read_skill_md,
+            read_skill_file,
             list_skill_files,
             toggle_skill,
             uninstall_skill,
             list_installed_skills,
+            scan_repo_skills,
             install_skill_from_repo,
             create_skill,
+            check_skill_update,
+            update_skill,
+            set_skill_repository,
             // 窗口主题
             set_window_theme,
         ])

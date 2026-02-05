@@ -108,6 +108,7 @@ export async function getDashboardStats(): Promise<DashboardStats> {
       total: skills.length,
       enabled: skills.filter(s => s.enabled).length,
       disabled: skills.filter(s => !s.enabled).length,
+      bySource: {},
       byInstalledBy: skills.reduce((acc, s) => {
         if (s.installedBy) {
           s.installedBy.forEach(tool => {

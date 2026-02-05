@@ -10,6 +10,7 @@ interface MarkdownEditorProps {
   readOnly?: boolean;
   height?: string | number;
   className?: string;
+  language?: string;  // 支持自定义语言
 }
 
 export default function MarkdownEditor({
@@ -18,6 +19,7 @@ export default function MarkdownEditor({
   readOnly = false,
   height = '400px',
   className,
+  language = 'markdown',
 }: MarkdownEditorProps) {
   const resolvedTheme = useAtomValue(resolvedThemeAtom);
   const editorRef = useRef<Parameters<OnMount>[0] | null>(null);
@@ -43,7 +45,7 @@ export default function MarkdownEditor({
     <div className={className}>
       <Editor
         height={height}
-        defaultLanguage="markdown"
+        defaultLanguage={language}
         value={value}
         onChange={handleChange}
         onMount={handleEditorDidMount}
