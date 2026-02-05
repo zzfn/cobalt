@@ -62,6 +62,7 @@ export interface SkillMetadata {
   tags?: string[];
   targetTools?: AiToolType[];  // 该 Skill 适用的 AI 工具
   repository?: string;  // 仓库 URL
+  sourceId?: string;  // 市场源 ID
   createdAt?: string;
   updatedAt?: string;
 }

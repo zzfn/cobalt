@@ -81,6 +81,8 @@ pub struct SkillMetadata {
     pub target_tools: Vec<String>,
     #[serde(default)]
     pub repository: Option<String>,
+    #[serde(default)]
+    pub source_id: Option<String>,
 }
 
 /// Skill 注册表条目
@@ -893,6 +895,7 @@ fn install_single_skill(
             tags: Vec::new(),
             target_tools: Vec::new(),
             repository: Some(repo_url.to_string()),
+            source_id: None,
         });
     }
 
@@ -966,7 +969,7 @@ fn copy_dir_recursive(src: &PathBuf, dst: &PathBuf) -> Result<(), String> {
 }
 
 /// 解析 SKILL.md 的 frontmatter
-fn parse_skill_frontmatter(content: &str, default_name: &str) -> Option<SkillMetadata> {
+pub fn parse_skill_frontmatter(content: &str, default_name: &str) -> Option<SkillMetadata> {
     use regex::Regex;
 
     // 匹配 YAML frontmatter: ---\n...\n---
@@ -1016,6 +1019,7 @@ fn parse_skill_frontmatter(content: &str, default_name: &str) -> Option<SkillMet
         tags,
         target_tools,
         repository: None,
+        source_id: None,
     })
 }
 
@@ -1076,6 +1080,7 @@ pub fn create_skill(params: CreateSkillParams) -> Result<String, String> {
             tags: Vec::new(),
             target_tools: Vec::new(),
             repository: None,
+            source_id: None,
         }),
     });
 
@@ -1760,6 +1765,7 @@ pub async fn update_skill(skill_name: String) -> Result<String, String> {
                 tags: Vec::new(),
                 target_tools: Vec::new(),
                 repository: Some(repo_url.clone()),
+                source_id: None,
             }),
         });
     }
@@ -1821,6 +1827,7 @@ pub fn set_skill_repository(skill_name: String, repository: String) -> Result<()
                 tags: Vec::new(),
                 target_tools: Vec::new(),
                 repository: Some(repository.clone()),
+                source_id: None,
             });
         }
     } else {
@@ -1840,6 +1847,7 @@ pub fn set_skill_repository(skill_name: String, repository: String) -> Result<()
                 tags: Vec::new(),
                 target_tools: Vec::new(),
                 repository: Some(repository.clone()),
+                source_id: None,
             }),
         });
     }

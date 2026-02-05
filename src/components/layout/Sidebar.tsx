@@ -1,4 +1,4 @@
-import { NavLink, useLocation } from 'react-router-dom';
+import { Link, useLocation } from 'react-router-dom';
 import { useAtom } from 'jotai';
 import { useEffect, useState } from 'react';
 import { getVersion } from '@tauri-apps/api/app';
@@ -16,6 +16,7 @@ import {
   Terminal,
   FileJson,
   RefreshCw,
+  Database,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
@@ -39,6 +40,11 @@ const navItems: NavItem[] = [
     title: 'Skills',
     href: '/skills',
     icon: Sparkles,
+  },
+  {
+    title: 'Skill 市场',
+    href: '/skills/marketplace',
+    icon: Database,
   },
   {
     title: '通用设置',
@@ -123,27 +129,38 @@ export default function Sidebar() {
   };
 
   const renderNavItem = (item: NavItem, depth = 0) => {
-    const isActive = location.pathname === item.href || location.pathname.startsWith(item.href + '/');
+    // 精确匹配逻辑：避免 /skills/marketplace 也高亮 /skills
+    const isActive = (() => {
+      if (location.pathname === item.href) return true;
+
+      // 特殊处理 /skills 路由：只有访问 /skills/:skillName 时才高亮
+      if (item.href === '/skills') {
+        return location.pathname.startsWith('/skills/') &&
+               !location.pathname.startsWith('/skills/marketplace');
+      }
+
+      // 其他路由使用默认逻辑
+      return location.pathname.startsWith(item.href + '/');
+    })();
+
     const hasChildren = item.children && item.children.length > 0;
     const isExpanded = hasChildren && location.pathname.startsWith(item.href);
 
     return (
       <div key={item.href}>
-        <NavLink
+        <Link
           to={hasChildren ? item.children![0].href : item.href}
-          className={({ isActive: linkActive }) =>
-            cn(
-              'flex items-center gap-3 rounded-lg px-3 py-2 text-sm transition-colors',
-              'hover:bg-accent hover:text-accent-foreground',
-              (linkActive || isActive) && 'bg-accent text-accent-foreground',
-              collapsed && 'justify-center px-2',
-              depth > 0 && !collapsed && 'ml-4'
-            )
-          }
+          className={cn(
+            'flex items-center gap-3 rounded-lg px-3 py-2 text-sm transition-colors',
+            'hover:bg-accent hover:text-accent-foreground',
+            isActive && 'bg-accent text-accent-foreground',
+            collapsed && 'justify-center px-2',
+            depth > 0 && !collapsed && 'ml-4'
+          )}
         >
           <item.icon className={cn('h-4 w-4 shrink-0', collapsed && 'h-5 w-5')} />
           {!collapsed && <span>{item.title}</span>}
-        </NavLink>
+        </Link>
         {hasChildren && isExpanded && !collapsed && (
           <div className="mt-1 space-y-1">
             {item.children!.map((child) => renderNavItem(child, depth + 1))}
@@ -171,9 +188,9 @@ export default function Sidebar() {
 
       {/* 导航 */}
       <nav className="flex-1 space-y-1 overflow-y-auto p-2">
-        {navItems.slice(0, 2).map((item) => renderNavItem(item))}
+        {navItems.slice(0, 3).map((item) => renderNavItem(item))}
         <Separator className="my-2" />
-        {navItems.slice(2).map((item) => renderNavItem(item))}
+        {navItems.slice(3).map((item) => renderNavItem(item))}
       </nav>
 
       <Separator />

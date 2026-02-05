@@ -1,5 +1,5 @@
 import { Link } from 'react-router-dom';
-import { Sparkles, ExternalLink, Trash2 } from 'lucide-react';
+import { Sparkles, ExternalLink, Trash2, Database } from 'lucide-react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Switch } from '@/components/ui/switch';
@@ -24,9 +24,10 @@ interface SkillCardProps {
   onToggle?: (enabled: boolean) => void;
   onDelete?: () => void;
   className?: string;
+  sourceName?: string;  // 市场源名称（可选）
 }
 
-export default function SkillCard({ skill, onToggle, onDelete, className }: SkillCardProps) {
+export default function SkillCard({ skill, onToggle, onDelete, className, sourceName }: SkillCardProps) {
   return (
     <Card className={cn('group relative transition-shadow hover:shadow-md', className)}>
       <CardHeader className="pb-3">
@@ -77,6 +78,12 @@ export default function SkillCard({ skill, onToggle, onDelete, className }: Skil
       </CardHeader>
       <CardContent>
         <div className="flex flex-wrap items-center gap-2">
+          {skill.metadata.sourceId && sourceName && (
+            <Badge variant="secondary" className="text-xs bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200">
+              <Database className="h-3 w-3 mr-1" />
+              来自: {sourceName}
+            </Badge>
+          )}
           {skill.installedBy && skill.installedBy.length > 0 && (
             <Badge variant="secondary" className="text-xs bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200">
               安装自: {skill.installedBy.map(tool => {

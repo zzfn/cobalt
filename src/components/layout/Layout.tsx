@@ -7,9 +7,13 @@ import UpdateChecker from '@/components/UpdateChecker';
 import { resolvedThemeAtom } from '@/store/uiAtoms';
 import { invoke } from '@tauri-apps/api/core';
 import { getCurrentWindow } from '@tauri-apps/api/window';
+import { useMarketplaceInit } from '@/hooks/useMarketplaceInit';
 
 export default function Layout() {
   const resolvedTheme = useAtomValue(resolvedThemeAtom);
+
+  // 初始化市场数据源
+  useMarketplaceInit();
 
   // 应用主题到 document 和窗口
   useEffect(() => {

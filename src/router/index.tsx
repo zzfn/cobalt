@@ -7,6 +7,8 @@ import ClaudeCodeSettings from '@/pages/Settings/ClaudeCode';
 import SettingsJsonEditor from '@/pages/Settings/SettingsJson';
 import SkillsList from '@/pages/Skills/List';
 import SkillDetail from '@/pages/Skills/Detail';
+import MarketplaceList from '@/pages/Skills/Marketplace/List';
+import MarketplaceDetail from '@/pages/Skills/Marketplace/Detail';
 import { GlassCardExample } from '@/components/examples/GlassCardExample';
 import GlassTest from '@/pages/GlassTest';
 
@@ -54,6 +56,19 @@ export const router = createBrowserRouter([
           {
             index: true,
             element: <SkillsList />,
+          },
+          {
+            path: 'marketplace',
+            children: [
+              {
+                index: true,
+                element: <MarketplaceList />,
+              },
+              {
+                path: ':sourceId',
+                element: <MarketplaceDetail />,
+              },
+            ],
           },
           {
             path: ':skillName',

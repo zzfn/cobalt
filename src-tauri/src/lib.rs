@@ -12,6 +12,10 @@ use commands::{
     check_skill_update, create_skill, install_skill_from_repo, list_installed_skills,
     list_skill_files, read_skill_file, read_skill_md, read_skill_registry, scan_repo_skills,
     set_skill_repository, toggle_skill, uninstall_skill, update_skill, write_skill_registry,
+    // Skill 市场命令
+    add_marketplace, get_marketplace_skills, install_skill_from_marketplace, list_marketplace,
+    refresh_all_marketplace, refresh_marketplace, remove_marketplace, toggle_marketplace,
+    update_marketplace, init_default_sources,
 };
 
 #[cfg(target_os = "macos")]
@@ -99,6 +103,17 @@ pub fn run() {
             check_skill_update,
             update_skill,
             set_skill_repository,
+            // Skill 市场命令
+            list_marketplace,
+            add_marketplace,
+            remove_marketplace,
+            toggle_marketplace,
+            update_marketplace,
+            refresh_marketplace,
+            refresh_all_marketplace,
+            get_marketplace_skills,
+            install_skill_from_marketplace,
+            init_default_sources,
             // 窗口主题
             set_window_theme,
         ])
