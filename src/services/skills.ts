@@ -15,6 +15,7 @@ interface BackendSkillEntry {
     version?: string;
     description?: string;
     tags?: string[];
+    targetTools?: string[];
     repository?: string;
     commitHash?: string;
   };
@@ -33,6 +34,7 @@ interface BackendSkillDetail {
     version?: string;
     description?: string;
     tags?: string[];
+    targetTools?: string[];
     repository?: string;
     commitHash?: string;
   };
@@ -52,6 +54,7 @@ function toSkillRegistryEntry(entry: BackendSkillEntry): SkillRegistryEntry {
       version: entry.metadata?.version || '0.0.0',
       description: entry.metadata?.description || entry.description || '',
       tags: entry.metadata?.tags || [],
+      targetTools: entry.metadata?.targetTools as any,
     },
   };
 }
@@ -70,6 +73,7 @@ function toSkillDetail(detail: BackendSkillDetail): SkillDetail {
       version: detail.metadata?.version || '0.0.0',
       description: detail.metadata?.description || detail.description || '',
       tags: detail.metadata?.tags || [],
+      targetTools: detail.metadata?.targetTools as any,
     },
   };
 }
@@ -114,4 +118,21 @@ export async function uninstallSkill(skillName: string): Promise<void> {
  */
 export async function listSkillFiles(skillName: string): Promise<string[]> {
   return invoke<string[]>('list_skill_files', { skillName });
+}
+
+/**
+ * 从远程仓库安装 Skill
+ */
+export async function installSkillFromRepo(repoUrl: string): Promise<string> {
+  console.log('📡 [Service] installSkillFromRepo 被调用');
+  console.log('📦 [Service] 仓库 URL:', repoUrl);
+
+  try {
+    const result = await invoke<string>('install_skill_from_repo', { repoUrl });
+    console.log('✅ [Service] 安装成功:', result);
+    return result;
+  } catch (error) {
+    console.error('❌ [Service] 安装失败:', error);
+    throw error;
+  }
 }

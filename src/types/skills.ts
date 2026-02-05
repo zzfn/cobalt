@@ -1,6 +1,57 @@
 // Skills 相关类型定义
 
 /**
+ * 支持的 AI 工具类型
+ */
+export type AiToolType = 'claude-code' | 'cursor' | 'codex' | 'opencode' | 'antigravity';
+
+/**
+ * AI 工具元信息
+ */
+export interface AiToolMeta {
+  id: AiToolType;
+  name: string;
+  displayName: string;
+  icon: string;
+}
+
+/**
+ * AI 工具元数据映射
+ */
+export const AI_TOOL_META: Record<AiToolType, AiToolMeta> = {
+  'claude-code': {
+    id: 'claude-code',
+    name: 'claude-code',
+    displayName: 'Claude Code',
+    icon: '🤖',
+  },
+  'cursor': {
+    id: 'cursor',
+    name: 'cursor',
+    displayName: 'Cursor',
+    icon: '⚡',
+  },
+  'codex': {
+    id: 'codex',
+    name: 'codex',
+    displayName: 'Codex',
+    icon: '🔮',
+  },
+  'opencode': {
+    id: 'opencode',
+    name: 'opencode',
+    displayName: 'OpenCode',
+    icon: '🌟',
+  },
+  'antigravity': {
+    id: 'antigravity',
+    name: 'antigravity',
+    displayName: 'Antigravity',
+    icon: '🚀',
+  },
+};
+
+/**
  * Skill 元数据
  */
 export interface SkillMetadata {
@@ -9,6 +60,7 @@ export interface SkillMetadata {
   description: string;
   author?: string;
   tags?: string[];
+  targetTools?: AiToolType[];  // 该 Skill 适用的 AI 工具
   createdAt?: string;
   updatedAt?: string;
 }
@@ -53,6 +105,7 @@ export interface SkillExample {
 export interface SkillFilter {
   search?: string;
   source?: 'all' | 'local' | 'remote' | 'builtin';
+  targetTool?: AiToolType | 'all';  // 按 AI 工具过滤
   enabled?: boolean;
   tags?: string[];
 }

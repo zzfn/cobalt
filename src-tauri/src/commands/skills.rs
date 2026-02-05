@@ -27,6 +27,8 @@ pub struct SkillMetadata {
     #[serde(default)]
     pub tags: Vec<String>,
     #[serde(default)]
+    pub target_tools: Vec<String>,
+    #[serde(default)]
     pub repository: Option<String>,
     #[serde(default)]
     pub commit_hash: Option<String>,
@@ -280,4 +282,321 @@ pub fn list_installed_skills() -> Result<Vec<SkillRegistryEntry>, String> {
 
     skills.sort_by(|a, b| a.name.cmp(&b.name));
     Ok(skills)
+}
+
+/// 从远程仓库安装 Skill
+#[tauri::command]
+pub fn install_skill_from_repo(repo_url: String) -> Result<String, String> {
+    use std::process::Command;
+
+    println!("🔧 [Backend] 开始安装 Skill");
+    println!("📦 [Backend] 仓库 URL: {}", repo_url);
+
+    let skills_dir = get_skills_dir()?;
+    println!("📁 [Backend] Skills 目录: {:?}", skills_dir);
+
+    // 确保 skills 目录存在
+    fs::create_dir_all(&skills_dir).map_err(|e| {
+        let err = format!("创建 skills 目录失败: {}", e);
+        eprintln!("❌ [Backend] {}", err);
+        err
+    })?;
+
+    // 从 URL 提取仓库名称
+    let repo_name = repo_url
+        .trim_end_matches('/')
+        .split('/')
+        .last()
+        .ok_or_else(|| {
+            let err = "无效的仓库 URL".to_string();
+            eprintln!("❌ [Backend] {}", err);
+            err
+        })?
+        .trim_end_matches(".git");
+
+    println!("📝 [Backend] 仓库名称: {}", repo_name);
+
+    // 创建临时目录用于克隆
+    let temp_dir = std::env::temp_dir().join(format!("cobalt-skill-{}", repo_name));
+    if temp_dir.exists() {
+        fs::remove_dir_all(&temp_dir).map_err(|e| format!("删除临时目录失败: {}", e))?;
+    }
+
+    println!("📂 [Backend] 临时目录: {:?}", temp_dir);
+
+    // 克隆仓库到临时目录
+    println!("⏳ [Backend] 开始克隆仓库...");
+    let output = Command::new("git")
+        .args(&["clone", &repo_url, temp_dir.to_str().unwrap()])
+        .output()
+        .map_err(|e| {
+            let err = format!("执行 git clone 失败: {}", e);
+            eprintln!("❌ [Backend] {}", err);
+            err
+        })?;
+
+    if !output.status.success() {
+        let error = String::from_utf8_lossy(&output.stderr);
+        let err = format!("克隆仓库失败: {}", error);
+        eprintln!("❌ [Backend] {}", err);
+        return Err(err);
+    }
+    println!("✅ [Backend] 仓库克隆成功");
+
+    // 获取 commit hash
+    println!("🔍 [Backend] 获取 commit hash...");
+    let commit_hash = Command::new("git")
+        .args(&["-C", temp_dir.to_str().unwrap(), "rev-parse", "HEAD"])
+        .output()
+        .ok()
+        .and_then(|o| String::from_utf8(o.stdout).ok())
+        .map(|s| s.trim().to_string());
+
+    if let Some(ref hash) = commit_hash {
+        println!("✅ [Backend] Commit hash: {}", hash);
+    }
+
+    // 检查是否有 skills 子目录
+    let skills_subdir = temp_dir.join("skills");
+    let source_dir = if skills_subdir.exists() && skills_subdir.is_dir() {
+        println!("✅ [Backend] 发现 skills/ 子目录");
+        skills_subdir
+    } else {
+        println!("📝 [Backend] 未找到 skills/ 子目录，将整个仓库作为单个 skill");
+        temp_dir.clone()
+    };
+
+    // 扫描并安装 skills
+    let installed_skills = install_skills_from_dir(&source_dir, &skills_dir, &repo_url, commit_hash.as_deref())?;
+
+    // 清理临时目录
+    if temp_dir.exists() {
+        let _ = fs::remove_dir_all(&temp_dir);
+    }
+
+    if installed_skills.is_empty() {
+        return Err("未找到可安装的 skills".to_string());
+    }
+
+    println!("🎉 [Backend] 成功安装 {} 个 skill(s)", installed_skills.len());
+    Ok(format!("成功安装 {} 个 skill: {}", installed_skills.len(), installed_skills.join(", ")))
+}
+
+/// 从目录中扫描并安装 skills
+fn install_skills_from_dir(
+    source_dir: &PathBuf,
+    target_skills_dir: &PathBuf,
+    repo_url: &str,
+    commit_hash: Option<&str>,
+) -> Result<Vec<String>, String> {
+    let mut installed = Vec::new();
+
+    // 检查是否是单个 skill（包含 SKILL.md）
+    let skill_md = source_dir.join("SKILL.md");
+    if skill_md.exists() {
+        println!("📖 [Backend] 发现 SKILL.md，作为单个 skill 安装");
+        let skill_name = source_dir
+            .file_name()
+            .and_then(|n| n.to_str())
+            .unwrap_or("skill");
+
+        install_single_skill(source_dir, target_skills_dir, skill_name, repo_url, commit_hash)?;
+        installed.push(skill_name.to_string());
+        return Ok(installed);
+    }
+
+    // 否则扫描子目录
+    println!("🔍 [Backend] 扫描子目录中的 skills...");
+    let entries = fs::read_dir(source_dir)
+        .map_err(|e| format!("读取目录失败: {}", e))?;
+
+    for entry in entries {
+        if let Ok(entry) = entry {
+            let path = entry.path();
+            if path.is_dir() {
+                let skill_md = path.join("SKILL.md");
+                if skill_md.exists() {
+                    if let Some(skill_name) = path.file_name().and_then(|n| n.to_str()) {
+                        println!("📦 [Backend] 发现 skill: {}", skill_name);
+                        match install_single_skill(&path, target_skills_dir, skill_name, repo_url, commit_hash) {
+                            Ok(_) => {
+                                installed.push(skill_name.to_string());
+                            }
+                            Err(e) => {
+                                eprintln!("⚠️  [Backend] 安装 {} 失败: {}", skill_name, e);
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    Ok(installed)
+}
+
+/// 安装单个 skill
+fn install_single_skill(
+    source_path: &PathBuf,
+    target_skills_dir: &PathBuf,
+    skill_name: &str,
+    repo_url: &str,
+    commit_hash: Option<&str>,
+) -> Result<(), String> {
+    let target_dir = target_skills_dir.join(skill_name);
+
+    // 检查是否已存在
+    if target_dir.exists() {
+        println!("⚠️  [Backend] Skill '{}' 已存在，跳过", skill_name);
+        return Err(format!("Skill '{}' 已存在", skill_name));
+    }
+
+    // 复制目录
+    copy_dir_recursive(source_path, &target_dir)
+        .map_err(|e| format!("复制目录失败: {}", e))?;
+
+    // 解析 SKILL.md 的 frontmatter
+    let skill_md_path = target_dir.join("SKILL.md");
+    let mut metadata: Option<SkillMetadata> = None;
+
+    if skill_md_path.exists() {
+        if let Ok(content) = fs::read_to_string(&skill_md_path) {
+            metadata = parse_skill_frontmatter(&content, skill_name);
+            if metadata.is_some() {
+                println!("✅ [Backend] 成功解析 {} 的 frontmatter", skill_name);
+            }
+        }
+    }
+
+    // 如果没有从 SKILL.md 解析到 metadata，尝试读取 metadata.json
+    if metadata.is_none() {
+        let metadata_path = target_dir.join("metadata.json");
+        if metadata_path.exists() {
+            metadata = fs::read_to_string(&metadata_path)
+                .ok()
+                .and_then(|c| serde_json::from_str(&c).ok());
+        }
+    }
+
+    // 更新 metadata
+    if let Some(ref mut meta) = metadata {
+        meta.repository = Some(repo_url.to_string());
+        meta.commit_hash = commit_hash.map(|s| s.to_string());
+    } else {
+        metadata = Some(SkillMetadata {
+            name: skill_name.to_string(),
+            version: None,
+            description: None,
+            tags: Vec::new(),
+            target_tools: Vec::new(),
+            repository: Some(repo_url.to_string()),
+            commit_hash: commit_hash.map(|s| s.to_string()),
+        });
+    }
+
+    // 添加到注册表
+    let mut registry = read_skill_registry()
+        .map_err(|e| format!("读取注册表失败: {}", e))?;
+
+    let now = chrono::Utc::now().to_rfc3339();
+
+    registry.skills.push(SkillRegistryEntry {
+        id: skill_name.to_string(),
+        name: skill_name.to_string(),
+        description: metadata.as_ref().and_then(|m| m.description.clone()),
+        enabled: true,
+        source: "remote".to_string(),
+        installed_at: Some(now),
+        metadata,
+    });
+
+    write_skill_registry(registry)
+        .map_err(|e| format!("写入注册表失败: {}", e))?;
+
+    println!("✅ [Backend] Skill '{}' 安装成功", skill_name);
+    Ok(())
+}
+
+/// 递归复制目录
+fn copy_dir_recursive(src: &PathBuf, dst: &PathBuf) -> Result<(), String> {
+    fs::create_dir_all(dst).map_err(|e| format!("创建目录失败: {}", e))?;
+
+    let entries = fs::read_dir(src).map_err(|e| format!("读取源目录失败: {}", e))?;
+
+    for entry in entries {
+        if let Ok(entry) = entry {
+            let path = entry.path();
+            let file_name = entry.file_name();
+
+            // 跳过 .git 目录
+            if file_name == ".git" {
+                continue;
+            }
+
+            let dst_path = dst.join(&file_name);
+
+            if path.is_dir() {
+                copy_dir_recursive(&path, &dst_path)?;
+            } else {
+                fs::copy(&path, &dst_path).map_err(|e| format!("复制文件失败: {}", e))?;
+            }
+        }
+    }
+
+    Ok(())
+}
+
+/// 解析 SKILL.md 的 frontmatter
+fn parse_skill_frontmatter(content: &str, default_name: &str) -> Option<SkillMetadata> {
+    use regex::Regex;
+
+    // 匹配 YAML frontmatter: ---\n...\n---
+    let re = Regex::new(r"(?s)^---\s*\n(.*?)\n---").ok()?;
+    let caps = re.captures(content)?;
+    let frontmatter = caps.get(1)?.as_str();
+
+    // 解析 YAML
+    let yaml: serde_yaml::Value = serde_yaml::from_str(frontmatter).ok()?;
+
+    let name = yaml.get("name")
+        .and_then(|v| v.as_str())
+        .unwrap_or(default_name)
+        .to_string();
+
+    let description = yaml.get("description")
+        .and_then(|v| v.as_str())
+        .map(|s| s.to_string());
+
+    let version = yaml.get("version")
+        .and_then(|v| v.as_str())
+        .map(|s| s.to_string());
+
+    let tags = yaml.get("tags")
+        .and_then(|v| v.as_sequence())
+        .map(|seq| {
+            seq.iter()
+                .filter_map(|v| v.as_str().map(|s| s.to_string()))
+                .collect()
+        })
+        .unwrap_or_default();
+
+    // 解析 allowed-tools 字段
+    let target_tools = yaml.get("allowed-tools")
+        .and_then(|v| v.as_str())
+        .map(|s| {
+            s.split(',')
+                .map(|t| t.trim().to_string())
+                .collect()
+        })
+        .unwrap_or_default();
+
+    Some(SkillMetadata {
+        name,
+        version,
+        description,
+        tags,
+        target_tools,
+        repository: None,
+        commit_hash: None,
+    })
 }

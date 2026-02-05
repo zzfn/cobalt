@@ -16,6 +16,7 @@ export const selectedSkillAtom = atom<SkillDetail | null>(null);
 export const skillsFilterAtom = atom<SkillFilter>({
   search: '',
   source: 'all',
+  targetTool: 'all',
   enabled: undefined,
   tags: [],
 });
@@ -52,6 +53,13 @@ export const filteredSkillsAtom = atom((get) => {
   // 来源过滤
   if (filter.source && filter.source !== 'all') {
     filtered = filtered.filter((skill) => skill.source === filter.source);
+  }
+
+  // AI 工具类型过滤
+  if (filter.targetTool && filter.targetTool !== 'all') {
+    filtered = filtered.filter((skill) =>
+      skill.metadata.targetTools?.some(tool => tool === filter.targetTool)
+    );
   }
 
   // 启用状态过滤
