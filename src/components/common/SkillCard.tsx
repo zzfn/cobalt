@@ -85,11 +85,6 @@ export default function SkillCard({ skill, onToggle, onDelete, className }: Skil
               }).join(', ')}
             </Badge>
           )}
-          {skill.metadata.version && (
-            <Badge variant="outline" className="text-xs">
-              v{skill.metadata.version}
-            </Badge>
-          )}
           {skill.metadata.targetTools?.map((toolType) => (
             <Badge
               key={toolType}
