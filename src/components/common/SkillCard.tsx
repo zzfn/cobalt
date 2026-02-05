@@ -5,6 +5,7 @@ import { Badge } from '@/components/ui/badge';
 import { Switch } from '@/components/ui/switch';
 import { cn } from '@/lib/utils';
 import type { SkillRegistryEntry } from '@/types/skills';
+import { AI_TOOL_META } from '@/types/skills';
 
 interface SkillCardProps {
   skill: SkillRegistryEntry;
@@ -58,6 +59,16 @@ export default function SkillCard({ skill, onToggle, className }: SkillCardProps
               v{skill.metadata.version}
             </Badge>
           )}
+          {skill.metadata.targetTools?.map((toolType) => (
+            <Badge
+              key={toolType}
+              variant="outline"
+              className="text-xs"
+              title={`适用于 ${AI_TOOL_META[toolType].displayName}`}
+            >
+              {AI_TOOL_META[toolType].icon} {AI_TOOL_META[toolType].displayName}
+            </Badge>
+          ))}
           {skill.metadata.tags?.slice(0, 3).map((tag) => (
             <Badge key={tag} variant="outline" className="text-xs">
               {tag}

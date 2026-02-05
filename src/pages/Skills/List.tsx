@@ -1,6 +1,6 @@
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { useAtom, useAtomValue, useSetAtom } from 'jotai';
-import { Sparkles, Search, Filter, RefreshCw } from 'lucide-react';
+import { Sparkles, Search, Filter, RefreshCw, Plus } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import {
@@ -12,6 +12,7 @@ import {
   DialogTrigger,
 } from '@/components/ui/dialog';
 import { Badge } from '@/components/ui/badge';
+import { Label } from '@/components/ui/label';
 import SkillCard from '@/components/common/SkillCard';
 import {
   skillsListAtom,
@@ -23,6 +24,7 @@ import {
 import {
   listInstalledSkills,
   toggleSkill as toggleSkillApi,
+  installSkillFromRepo,
 } from '@/services/skills';
 
 export default function SkillsList() {
@@ -31,6 +33,12 @@ export default function SkillsList() {
   const filteredSkills = useAtomValue(filteredSkillsAtom);
   const [loading, setLoading] = useAtom(skillsLoadingAtom);
   const setError = useSetAtom(skillsErrorAtom);
+
+  // 安装对话框状态
+  const [installDialogOpen, setInstallDialogOpen] = useState(false);
+  const [repoUrl, setRepoUrl] = useState('');
+  const [installing, setInstalling] = useState(false);
+  const [installError, setInstallError] = useState<string | null>(null);
 
   // 加载 Skills 数据
   const loadSkills = async () => {
@@ -73,11 +81,53 @@ export default function SkillsList() {
     }
   };
 
+  const handleInstallSkill = async () => {
+    console.log('🔧 handleInstallSkill 被调用');
+    console.log('📦 仓库 URL:', repoUrl);
+
+    if (!repoUrl.trim()) {
+      console.log('❌ URL 为空');
+      setInstallError('请输入仓库 URL');
+      return;
+    }
+
+    console.log('⏳ 开始安装...');
+    setInstalling(true);
+    setInstallError(null);
+
+    try {
+      console.log('📡 调用 installSkillFromRepo...');
+      const result = await installSkillFromRepo(repoUrl);
+      console.log('✅ 安装成功:', result);
+      alert(`安装成功！\n\n${result}`);
+      setInstallDialogOpen(false);
+      setRepoUrl('');
+      // 重新加载列表
+      await loadSkills();
+    } catch (err) {
+      console.error('❌ 安装失败:', err);
+      const message = err instanceof Error ? err.message : '安装失败';
+      setInstallError(message);
+    } finally {
+      console.log('🏁 安装流程结束');
+      setInstalling(false);
+    }
+  };
+
   const sourceFilters = [
     { value: 'all', label: '全部' },
     { value: 'builtin', label: '内置' },
     { value: 'local', label: '本地' },
     { value: 'remote', label: '远程' },
+  ] as const;
+
+  const toolFilters = [
+    { value: 'all', label: '全部工具', icon: '🤖' },
+    { value: 'claude-code', label: 'Claude Code', icon: '🤖' },
+    { value: 'cursor', label: 'Cursor', icon: '⚡' },
+    { value: 'codex', label: 'Codex', icon: '🔮' },
+    { value: 'opencode', label: 'OpenCode', icon: '🌟' },
+    { value: 'antigravity', label: 'Antigravity', icon: '🚀' },
   ] as const;
 
   return (
@@ -92,10 +142,65 @@ export default function SkillsList() {
             </p>
           </div>
         </div>
-        <Button variant="outline" size="sm" onClick={loadSkills} disabled={loading}>
-          <RefreshCw className={`mr-2 h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
-          刷新
-        </Button>
+        <div className="flex gap-2">
+          <Dialog open={installDialogOpen} onOpenChange={setInstallDialogOpen}>
+            <DialogTrigger asChild>
+              <Button variant="default" size="sm">
+                <Plus className="mr-2 h-4 w-4" />
+                安装 Skill
+              </Button>
+            </DialogTrigger>
+            <DialogContent>
+              <DialogHeader>
+                <DialogTitle>从仓库安装 Skill</DialogTitle>
+                <DialogDescription>
+                  输入 Git 仓库 URL 来安装新的 Skill
+                </DialogDescription>
+              </DialogHeader>
+              <div className="space-y-4">
+                <div className="space-y-2">
+                  <Label htmlFor="repo-url">仓库 URL</Label>
+                  <Input
+                    id="repo-url"
+                    placeholder="https://github.com/username/skill-name"
+                    value={repoUrl}
+                    onChange={(e) => setRepoUrl(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter' && !installing) {
+                        handleInstallSkill();
+                      }
+                    }}
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    支持 GitHub、GitLab 等 Git 仓库
+                  </p>
+                  {installError && (
+                    <p className="text-xs text-destructive">{installError}</p>
+                  )}
+                </div>
+                <div className="flex justify-end gap-2">
+                  <Button
+                    variant="outline"
+                    onClick={() => {
+                      setInstallDialogOpen(false);
+                      setInstallError(null);
+                    }}
+                    disabled={installing}
+                  >
+                    取消
+                  </Button>
+                  <Button onClick={handleInstallSkill} disabled={installing}>
+                    {installing ? '安装中...' : '安装'}
+                  </Button>
+                </div>
+              </div>
+            </DialogContent>
+          </Dialog>
+          <Button variant="outline" size="sm" onClick={loadSkills} disabled={loading}>
+            <RefreshCw className={`mr-2 h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
+            刷新
+          </Button>
+        </div>
       </div>
 
       {/* 搜索和过滤 */}
@@ -137,6 +242,26 @@ export default function SkillsList() {
                       }
                     >
                       {option.label}
+                    </Badge>
+                  ))}
+                </div>
+              </div>
+              <div>
+                <p className="mb-2 text-sm font-medium">AI 工具</p>
+                <div className="flex flex-wrap gap-2">
+                  {toolFilters.map((option) => (
+                    <Badge
+                      key={option.value}
+                      variant={
+                        filter.targetTool === option.value ? 'default' : 'outline'
+                      }
+                      className="cursor-pointer gap-1"
+                      onClick={() =>
+                        setFilter({ ...filter, targetTool: option.value as any })
+                      }
+                    >
+                      <span>{option.icon}</span>
+                      <span>{option.label}</span>
                     </Badge>
                   ))}
                 </div>
