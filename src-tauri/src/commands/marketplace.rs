@@ -600,6 +600,7 @@ pub fn get_marketplace_skills(source_id: String) -> Result<MarketplaceCache, Str
 pub async fn install_skill_from_marketplace(
     source_id: String,
     skill_names: Vec<String>,
+    target_tools: Option<Vec<String>>,
 ) -> Result<String, String> {
     use super::skills::{install_skill_from_repo, read_skill_registry, write_skill_registry};
 
@@ -611,7 +612,7 @@ pub async fn install_skill_from_marketplace(
         .ok_or_else(|| format!("市场源 {} 不存在", source_id))?;
 
     // 调用现有的安装函数
-    let result = install_skill_from_repo(source.url.clone(), Some(skill_names.clone())).await?;
+    let result = install_skill_from_repo(source.url.clone(), Some(skill_names.clone()), target_tools).await?;
 
     // 安装完成后，更新 metadata 中的 sourceId
     let mut registry = read_skill_registry().map_err(|e| format!("读取注册表失败: {}", e))?;
@@ -644,25 +645,32 @@ fn get_builtin_sources() -> Vec<(String, String, String, Vec<String>)> {
             "Vercel Labs 的浏览器自动化工具，支持 AI Agent 进行网页交互".to_string(),
             vec!["community".to_string(), "browser".to_string(), "automation".to_string(), "vercel".to_string()],
         ),
+        (
+            "https://github.com/softaworks/agent-toolkit".to_string(),
+            "Agent Toolkit".to_string(),
+            "Softaworks 的 Agent 工具集，提供丰富的 AI Agent 技能".to_string(),
+            vec!["community".to_string(), "toolkit".to_string(), "softaworks".to_string()],
+        ),
     ]
 }
 
-/// 初始化默认数据源（首次启动时）
+/// 初始化默认数据源（首次启动时或添加新的内置源）
 #[tauri::command]
 pub async fn init_default_sources() -> Result<Vec<MarketplaceSource>, String> {
     let mut config = read_marketplace_config()?;
 
-    // 如果已有数据源，跳过初始化
-    if !config.sources.is_empty() {
-        return Ok(config.sources);
-    }
-
-    println!("🎉 初始化默认数据源...");
+    println!("🔍 检查内置数据源...");
 
     let builtin_sources = get_builtin_sources();
     let mut added_sources = Vec::new();
 
     for (url, name, description, tags) in builtin_sources {
+        // 检查该 URL 是否已存在
+        if config.sources.iter().any(|s| s.url == url) {
+            println!("⏭️  跳过已存在的数据源: {}", name);
+            continue;
+        }
+
         let source = MarketplaceSource {
             id: Uuid::new_v4().to_string(),
             name: name.clone(),
@@ -682,9 +690,13 @@ pub async fn init_default_sources() -> Result<Vec<MarketplaceSource>, String> {
         println!("✅ 添加内置数据源: {}", name);
     }
 
-    write_marketplace_config(&config)?;
+    if !added_sources.is_empty() {
+        write_marketplace_config(&config)?;
+        println!("🎉 初始化完成，添加了 {} 个新数据源", added_sources.len());
+    } else {
+        println!("✅ 所有内置数据源已存在，无需添加");
+    }
 
-    println!("🎉 初始化完成，添加了 {} 个数据源", added_sources.len());
     Ok(added_sources)
 }
 

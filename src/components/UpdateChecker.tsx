@@ -96,16 +96,33 @@ export default function UpdateChecker() {
               break;
             case 'Finished':
               setInstalling(true);
-              toast.success('更新下载完成，正在安装...', {
+              toast.success('更新安装完成', {
                 id: 'update-download',
               });
               break;
           }
         });
 
-        // 关闭弹窗并重启应用
-        setUpdateAvailable(false);
-        await relaunch();
+        // 更新安装完成，提示即将重启
+        toast.success('更新安装完成，应用将在 2 秒后重启...', {
+          duration: 2000,
+        });
+
+        // 延迟 2 秒后重启，让用户看到提示
+        await new Promise(resolve => setTimeout(resolve, 2000));
+
+        // 重启应用
+        try {
+          await relaunch();
+        } catch (relaunchError) {
+          // 如果自动重启失败，提示用户手动重启
+          console.error('自动重启失败:', relaunchError);
+          toast.error('请手动重启应用以完成更新', {
+            duration: 5000,
+          });
+          setInstalling(false);
+          setDownloading(false);
+        }
       }
     } catch (error) {
       console.error('更新失败:', error);
@@ -155,10 +172,10 @@ export default function UpdateChecker() {
         {installing && (
           <div className="space-y-3">
             <div className="flex items-center justify-between text-sm">
-              <span className="text-muted-foreground">正在安装</span>
-              <span className="font-medium">应用将自动重启</span>
+              <span className="text-muted-foreground">安装完成</span>
+              <span className="font-medium text-green-600">应用将在 2 秒后自动重启</span>
             </div>
-            <Progress value={100} />
+            <Progress value={100} className="bg-green-100" />
           </div>
         )}
 

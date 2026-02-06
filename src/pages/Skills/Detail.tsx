@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
-import { ArrowLeft, Sparkles, Loader2, FileText, Trash2, Eye, Code, Package, Tag, Folder, File, ChevronRight, ChevronDown, FolderOpen, RefreshCw, Download, AlertCircle } from 'lucide-react';
+import { ArrowLeft, Sparkles, Loader2, FileText, Trash2, Eye, Code, Package, Tag, Folder, File, ChevronRight, ChevronDown, FolderOpen, RefreshCw, Download, AlertCircle, Share2, X } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 import {
   Card,
@@ -27,9 +27,13 @@ import {
   AlertDialogTrigger,
 } from '@/components/ui/alert-dialog';
 import MarkdownEditor from '@/components/common/MarkdownEditor';
+import { TargetToolsDialog } from '@/components/skills/TargetToolsDialog';
+import { RemoveFromToolsDialog } from '@/components/skills/RemoveFromToolsDialog';
 import type { SkillDetail as SkillDetailType, SkillUpdateCheckResult } from '@/types/skills';
-import { getSkillDetail, toggleSkill as toggleSkillApi, uninstallSkill, readSkillFile, checkSkillUpdate, updateSkill, setSkillRepository } from '@/services/skills';
+import { AI_TOOL_META, type AiToolType } from '@/types/skills';
+import { getSkillDetail, toggleSkill as toggleSkillApi, uninstallSkill, readSkillFile, checkSkillUpdate, updateSkill, setSkillRepository, applySkillToTools, removeSkillFromTools } from '@/services/skills';
 import { logActivity } from '@/lib/activityLogger';
+import { toast } from 'sonner';
 
 // 根据文件扩展名获取语言类型
 function getLanguageFromFilename(filename: string): string {
@@ -235,6 +239,14 @@ export default function SkillDetail() {
   const [repoUrl, setRepoUrl] = useState('');
   const [savingRepo, setSavingRepo] = useState(false);
 
+  // 应用到其他工具状态
+  const [showApplyDialog, setShowApplyDialog] = useState(false);
+  const [applying, setApplying] = useState(false);
+
+  // 从工具中移除状态
+  const [showRemoveDialog, setShowRemoveDialog] = useState(false);
+  const [removing, setRemoving] = useState(false);
+
   // 解析 YAML frontmatter
   const parseFrontmatter = (content: string): { metadata: Record<string, any>; content: string } => {
     const lines = content.split('\n');
@@ -312,29 +324,30 @@ export default function SkillDetail() {
   const displayName = frontmatter?.name || skill?.name || '';
   const displayDescription = frontmatter?.description || skill?.description || '';
 
-  // 加载 Skill 详情
-  useEffect(() => {
+  // 加载 Skill 详情的函数（提取到组件级别以便复用）
+  const loadSkill = async () => {
     if (!skillName) return;
 
-    const loadSkill = async () => {
-      setLoading(true);
-      setError(null);
-      try {
-        const data = await getSkillDetail(skillName);
-        setSkill(data);
-        // 默认选中 SKILL.md 文件
-        if (data.files && data.files.includes('SKILL.md')) {
-          setSelectedFile('SKILL.md');
-        }
-      } catch (err) {
-        const message = err instanceof Error ? err.message : '加载 Skill 详情失败';
-        setError(message);
-        console.error('加载 Skill 详情失败:', err);
-      } finally {
-        setLoading(false);
+    setLoading(true);
+    setError(null);
+    try {
+      const data = await getSkillDetail(skillName);
+      setSkill(data);
+      // 默认选中 SKILL.md 文件
+      if (data.files && data.files.includes('SKILL.md')) {
+        setSelectedFile('SKILL.md');
       }
-    };
+    } catch (err) {
+      const message = err instanceof Error ? err.message : '加载 Skill 详情失败';
+      setError(message);
+      console.error('加载 Skill 详情失败:', err);
+    } finally {
+      setLoading(false);
+    }
+  };
 
+  // 加载 Skill 详情
+  useEffect(() => {
     loadSkill();
   }, [skillName]);
 
@@ -394,6 +407,42 @@ export default function SkillDetail() {
     } catch (err) {
       console.error('删除 Skill 失败:', err);
       alert(`删除失败: ${err instanceof Error ? err.message : '未知错误'}`);
+    }
+  };
+
+  // 应用到其他工具
+  const handleApplyToTools = async (targetTools: string[]) => {
+    if (!skill) return;
+
+    setApplying(true);
+    try {
+      const result = await applySkillToTools(skill.name, targetTools);
+      toast.success(result);
+      // 重新加载 skill 详情以更新 installedBy
+      await loadSkill();
+    } catch (err) {
+      const message = err instanceof Error ? err.message : '应用失败';
+      toast.error(message);
+    } finally {
+      setApplying(false);
+    }
+  };
+
+  // 从工具中移除
+  const handleRemoveFromTools = async (tools: string[]) => {
+    if (!skill) return;
+
+    setRemoving(true);
+    try {
+      const result = await removeSkillFromTools(skill.name, tools);
+      toast.success(result);
+      // 重新加载 skill 详情以更新 installedBy
+      await loadSkill();
+    } catch (err) {
+      const message = err instanceof Error ? err.message : '移除失败';
+      toast.error(message);
+    } finally {
+      setRemoving(false);
     }
   };
 
@@ -566,10 +615,18 @@ export default function SkillDetail() {
                 {/* 元信息标签 */}
                 <div className="flex flex-wrap items-center gap-2 mt-4">
                   {skill.installedBy && skill.installedBy.length > 0 && (
-                    <Badge variant="secondary" className="gap-1.5">
-                      <Package className="h-3 w-3" />
-                      {skill.installedBy.join(', ')}
-                    </Badge>
+                    <div className="flex items-center gap-2">
+                      <span className="text-sm text-muted-foreground">已安装到：</span>
+                      {skill.installedBy.map((toolId) => {
+                        const tool = AI_TOOL_META[toolId as AiToolType];
+                        return tool ? (
+                          <Badge key={toolId} variant="secondary" className="gap-1.5">
+                            <span>{tool.icon}</span>
+                            {tool.displayName}
+                          </Badge>
+                        ) : null;
+                      })}
+                    </div>
                   )}
                   {skill.metadata.tags?.map((tag) => (
                     <Badge key={tag} variant="outline" className="gap-1.5">
@@ -746,6 +803,38 @@ export default function SkillDetail() {
                 )}
               </div>
 
+              <Button
+                variant="outline"
+                size="sm"
+                className="gap-2 w-full"
+                onClick={() => setShowApplyDialog(true)}
+                disabled={applying}
+              >
+                {applying ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  <Share2 className="h-4 w-4" />
+                )}
+                应用到其他工具
+              </Button>
+
+              {skill.installedBy && skill.installedBy.length > 0 && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="gap-2 w-full"
+                  onClick={() => setShowRemoveDialog(true)}
+                  disabled={removing}
+                >
+                  {removing ? (
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                  ) : (
+                    <X className="h-4 w-4" />
+                  )}
+                  从工具中移除
+                </Button>
+              )}
+
               <AlertDialog>
                 <AlertDialogTrigger asChild>
                   <Button variant="destructive" size="sm" className="gap-2 w-full">
@@ -900,6 +989,29 @@ export default function SkillDetail() {
           </CardContent>
         </Card>
       </div>
+
+      {/* 应用到其他工具对话框 */}
+      {skill && (
+        <TargetToolsDialog
+          open={showApplyDialog}
+          onOpenChange={setShowApplyDialog}
+          onConfirm={handleApplyToTools}
+          defaultTools={skill.metadata.targetTools || []}
+          skillName={skill.name}
+          excludeTools={skill.installedBy || []}
+        />
+      )}
+
+      {/* 从工具中移除对话框 */}
+      {skill && (
+        <RemoveFromToolsDialog
+          open={showRemoveDialog}
+          onOpenChange={setShowRemoveDialog}
+          onConfirm={handleRemoveFromTools}
+          installedTools={skill.installedBy || []}
+          skillName={skill.name}
+        />
+      )}
     </div>
   );
 }

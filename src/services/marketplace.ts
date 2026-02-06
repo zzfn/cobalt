@@ -68,7 +68,8 @@ export async function getMarketplaceSkills(sourceId: string): Promise<Marketplac
  */
 export async function installSkillFromMarketplace(
   sourceId: string,
-  skillNames: string[]
+  skillNames: string[],
+  targetTools?: string[]
 ): Promise<string> {
-  return invoke('install_skill_from_marketplace', { sourceId, skillNames });
+  return invoke('install_skill_from_marketplace', { sourceId, skillNames, targetTools });
 }

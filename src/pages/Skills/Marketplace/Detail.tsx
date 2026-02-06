@@ -22,6 +22,7 @@ import {
   refreshMarketplace,
   installSkillFromMarketplace,
 } from '@/services/marketplace';
+import { TargetToolsDialog } from '@/components/skills/TargetToolsDialog';
 import type { CachedSkillInfo } from '@/types/marketplace';
 
 export default function MarketplaceDetail() {
@@ -36,6 +37,9 @@ export default function MarketplaceDetail() {
   const [searchQuery, setSearchQuery] = useState('');
   const [filterStatus, setFilterStatus] = useState<'all' | 'installed' | 'not-installed' | 'has-update'>('all');
   const [selectedSkills, setSelectedSkills] = useState<Set<string>>(new Set());
+  const [showTargetToolsDialog, setShowTargetToolsDialog] = useState(false);
+  const [pendingInstallSkills, setPendingInstallSkills] = useState<string[]>([]);
+  const [pendingInstallDefaultTools, setPendingInstallDefaultTools] = useState<string[]>([]);
 
   const source = sources.find((s) => s.id === sourceId);
   const cache = sourceId ? caches[sourceId] : null;
@@ -83,11 +87,28 @@ export default function MarketplaceDetail() {
   const handleInstallSelected = async () => {
     if (!sourceId || selectedSkills.size === 0) return;
 
+    // 获取选中 skills 的 targetTools
+    const skillsToInstall = Array.from(selectedSkills);
+    const firstSkill = cache?.skills.find(s => s.name === skillsToInstall[0]);
+    const defaultTools = firstSkill?.targetTools || [];
+
+    // 打开目标工具选择对话框
+    setPendingInstallSkills(skillsToInstall);
+    setPendingInstallDefaultTools(defaultTools);
+    setShowTargetToolsDialog(true);
+  };
+
+  // 确认安装到选中的工具
+  const handleConfirmInstall = async (targetTools: string[]) => {
+    if (!sourceId || pendingInstallSkills.length === 0) return;
+
     setInstalling(true);
     try {
-      await installSkillFromMarketplace(sourceId, Array.from(selectedSkills));
-      toast.success(`成功安装 ${selectedSkills.size} 个 Skill(s)`);
+      await installSkillFromMarketplace(sourceId, pendingInstallSkills, targetTools);
+      toast.success(`成功安装 ${pendingInstallSkills.length} 个 Skill(s) 到 ${targetTools.length} 个工具`);
       setSelectedSkills(new Set());
+      setPendingInstallSkills([]);
+      setPendingInstallDefaultTools([]);
       await loadSourceSkills();
     } catch (err) {
       const message = err instanceof Error ? err.message : '安装失败';
@@ -101,14 +122,14 @@ export default function MarketplaceDetail() {
   const handleInstallSkill = async (skillName: string) => {
     if (!sourceId) return;
 
-    try {
-      await installSkillFromMarketplace(sourceId, [skillName]);
-      toast.success(`Skill ${skillName} 安装成功`);
-      await loadSourceSkills();
-    } catch (err) {
-      const message = err instanceof Error ? err.message : '安装失败';
-      toast.error(message);
-    }
+    // 获取该 skill 的 targetTools
+    const skill = cache?.skills.find(s => s.name === skillName);
+    const defaultTools = skill?.targetTools || [];
+
+    // 打开目标工具选择对话框
+    setPendingInstallSkills([skillName]);
+    setPendingInstallDefaultTools(defaultTools);
+    setShowTargetToolsDialog(true);
   };
 
   // 切换选中状态
@@ -361,6 +382,15 @@ export default function MarketplaceDetail() {
           </div>
         </div>
       )}
+
+      {/* 目标工具选择对话框 */}
+      <TargetToolsDialog
+        open={showTargetToolsDialog}
+        onOpenChange={setShowTargetToolsDialog}
+        onConfirm={handleConfirmInstall}
+        defaultTools={pendingInstallDefaultTools}
+        skillName={pendingInstallSkills.length === 1 ? pendingInstallSkills[0] : undefined}
+      />
     </div>
   );
 }

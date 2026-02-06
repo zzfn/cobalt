@@ -234,3 +234,17 @@ export async function updateSkill(skillName: string): Promise<string> {
 export async function setSkillRepository(skillName: string, repository: string): Promise<void> {
   return invoke<void>('set_skill_repository', { skillName, repository });
 }
+
+/**
+ * 将已安装的 Skill 应用到其他 AI 工具
+ */
+export async function applySkillToTools(skillName: string, targetTools: string[]): Promise<string> {
+  return invoke<string>('apply_skill_to_tools', { skillName, targetTools });
+}
+
+/**
+ * 从指定的 AI 工具中移除 Skill
+ */
+export async function removeSkillFromTools(skillName: string, tools: string[]): Promise<string> {
+  return invoke<string>('remove_skill_from_tools', { skillName, tools });
+}

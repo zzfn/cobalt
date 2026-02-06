@@ -41,6 +41,26 @@ fn get_all_tool_skills_dirs() -> Vec<(&'static str, PathBuf)> {
     dirs
 }
 
+/// 根据工具名称列表获取对应的 skills 目录
+fn get_target_tool_dirs(tool_names: &Vec<String>) -> Result<Vec<(String, PathBuf)>, String> {
+    let all_dirs = get_all_tool_skills_dirs();
+    let mut target_dirs = Vec::new();
+
+    for tool_name in tool_names {
+        if let Some((_, dir)) = all_dirs.iter().find(|(name, _)| *name == tool_name.as_str()) {
+            target_dirs.push((tool_name.clone(), dir.clone()));
+        } else {
+            return Err(format!("未知的 AI 工具: {}", tool_name));
+        }
+    }
+
+    if target_dirs.is_empty() {
+        return Err("未指定有效的目标工具".to_string());
+    }
+
+    Ok(target_dirs)
+}
+
 /// 扫描指定目录获取所有 skill 名称
 fn scan_skills_in_dir(dir: &PathBuf) -> Vec<String> {
     let mut skills = Vec::new();
@@ -362,32 +382,41 @@ pub fn toggle_skill(skill_name: String, enabled: bool) -> Result<(), String> {
     Ok(())
 }
 
-/// 卸载 Skill
+/// 完全卸载 Skill（从所有 AI 工具中删除）
 #[tauri::command]
 pub fn uninstall_skill(skill_name: String) -> Result<(), String> {
-    let skills_dir = get_skills_dir()?;
-    let disabled_skills_dir = get_claude_dir()?.join(".disabled_skills");
+    println!("🗑️  [Backend] 完全卸载 Skill: {}", skill_name);
 
-    // 尝试从两个目录中删除
-    let enabled_path = skills_dir.join(&skill_name);
-    let disabled_path = disabled_skills_dir.join(&skill_name);
+    let mut deleted_from_tools = Vec::new();
 
-    let mut deleted = false;
-
-    if enabled_path.exists() {
-        fs::remove_dir_all(&enabled_path)
-            .map_err(|e| format!("删除 skill 目录失败: {}", e))?;
-        deleted = true;
+    // 从所有工具目录中删除
+    let all_tool_dirs = get_all_tool_skills_dirs();
+    for (tool_name, tool_dir) in &all_tool_dirs {
+        let skill_path = tool_dir.join(&skill_name);
+        if skill_path.exists() {
+            match fs::remove_dir_all(&skill_path) {
+                Ok(_) => {
+                    println!("✅ [Backend] 从 {} 中删除成功", tool_name);
+                    deleted_from_tools.push(tool_name.to_string());
+                }
+                Err(e) => {
+                    eprintln!("⚠️  [Backend] 从 {} 中删除失败: {}", tool_name, e);
+                }
+            }
+        }
     }
 
+    // 也检查 disabled_skills 目录
+    let disabled_skills_dir = get_claude_dir()?.join(".disabled_skills");
+    let disabled_path = disabled_skills_dir.join(&skill_name);
     if disabled_path.exists() {
         fs::remove_dir_all(&disabled_path)
-            .map_err(|e| format!("删除 skill 目录失败: {}", e))?;
-        deleted = true;
+            .map_err(|e| format!("删除禁用的 skill 目录失败: {}", e))?;
+        deleted_from_tools.push("disabled".to_string());
     }
 
-    if !deleted {
-        return Err(format!("Skill '{}' 不存在", skill_name));
+    if deleted_from_tools.is_empty() {
+        return Err(format!("Skill '{}' 不存在于任何工具中", skill_name));
     }
 
     // 从注册表中移除
@@ -395,7 +424,82 @@ pub fn uninstall_skill(skill_name: String) -> Result<(), String> {
     registry.skills.retain(|s| s.name != skill_name);
     write_skill_registry(registry)?;
 
+    println!("🎉 [Backend] Skill '{}' 已从 {} 个位置删除", skill_name, deleted_from_tools.len());
     Ok(())
+}
+
+/// 从指定的 AI 工具中移除 Skill
+#[tauri::command]
+pub fn remove_skill_from_tools(
+    skill_name: String,
+    tools: Vec<String>,
+) -> Result<String, String> {
+    println!("🗑️  [Backend] 从指定工具中移除 Skill");
+    println!("📦 [Backend] Skill: {}", skill_name);
+    println!("🎯 [Backend] 目标工具: {:?}", tools);
+
+    let mut removed_tools = Vec::new();
+    let mut not_found_tools = Vec::new();
+
+    // 获取所有工具目录
+    let all_tool_dirs = get_all_tool_skills_dirs();
+
+    for tool_name in &tools {
+        // 找到对应的工具目录
+        if let Some((_, tool_dir)) = all_tool_dirs.iter().find(|(name, _)| *name == tool_name.as_str()) {
+            let skill_path = tool_dir.join(&skill_name);
+
+            if skill_path.exists() {
+                match fs::remove_dir_all(&skill_path) {
+                    Ok(_) => {
+                        println!("✅ [Backend] 成功从 {} 中移除 {}", tool_name, skill_name);
+                        removed_tools.push(tool_name.clone());
+                    }
+                    Err(e) => {
+                        eprintln!("⚠️  [Backend] 从 {} 中移除 {} 失败: {}", tool_name, skill_name, e);
+                    }
+                }
+            } else {
+                println!("⚠️  [Backend] Skill '{}' 在 {} 中不存在", skill_name, tool_name);
+                not_found_tools.push(tool_name.clone());
+            }
+        }
+    }
+
+    if removed_tools.is_empty() {
+        return Err(format!("Skill '{}' 在指定的工具中都不存在", skill_name));
+    }
+
+    // 更新注册表
+    let mut registry = read_skill_registry()
+        .map_err(|e| format!("读取注册表失败: {}", e))?;
+
+    if let Some(entry) = registry.skills.iter_mut().find(|s| s.name == skill_name) {
+        // 从 installedBy 中移除这些工具
+        entry.installed_by.retain(|tool| !removed_tools.contains(tool));
+
+        // 如果没有工具安装了这个 skill，从注册表中完全移除
+        if entry.installed_by.is_empty() {
+            registry.skills.retain(|s| s.name != skill_name);
+            println!("📝 [Backend] Skill '{}' 已从所有工具中移除，从注册表中删除", skill_name);
+        }
+    }
+
+    write_skill_registry(registry)
+        .map_err(|e| format!("写入注册表失败: {}", e))?;
+
+    let message = if not_found_tools.is_empty() {
+        format!("成功从 {} 个工具中移除", removed_tools.len())
+    } else {
+        format!(
+            "成功从 {} 个工具中移除；{} 个工具中未找到该 Skill",
+            removed_tools.len(),
+            not_found_tools.len()
+        )
+    };
+
+    println!("🎉 [Backend] {}", message);
+    Ok(message)
 }
 
 /// 获取所有已安装的 Skills（扫描多个 AI Tools 目录）
@@ -687,7 +791,11 @@ fn scan_skills_in_directory(source_dir: &PathBuf) -> Result<Vec<ScannedSkillInfo
 
 /// 从远程仓库安装 Skill（支持选择性安装）
 #[tauri::command]
-pub async fn install_skill_from_repo(repo_url: String, skill_names: Option<Vec<String>>) -> Result<String, String> {
+pub async fn install_skill_from_repo(
+    repo_url: String,
+    skill_names: Option<Vec<String>>,
+    target_tools: Option<Vec<String>>,
+) -> Result<String, String> {
     use std::process::Command;
 
     println!("🔧 [Backend] 开始安装 Skill");
@@ -695,16 +803,28 @@ pub async fn install_skill_from_repo(repo_url: String, skill_names: Option<Vec<S
     if let Some(ref names) = skill_names {
         println!("📝 [Backend] 指定安装: {:?}", names);
     }
+    if let Some(ref tools) = target_tools {
+        println!("🎯 [Backend] 目标工具: {:?}", tools);
+    }
 
-    let skills_dir = get_skills_dir()?;
-    println!("📁 [Backend] Skills 目录: {:?}", skills_dir);
+    // 获取目标工具的目录列表
+    let target_dirs = if let Some(tools) = target_tools.as_ref() {
+        get_target_tool_dirs(tools)?
+    } else {
+        // 默认只安装到 claude-code
+        vec![("claude-code".to_string(), get_skills_dir()?)]
+    };
 
-    // 确保 skills 目录存在
-    fs::create_dir_all(&skills_dir).map_err(|e| {
-        let err = format!("创建 skills 目录失败: {}", e);
-        eprintln!("❌ [Backend] {}", err);
-        err
-    })?;
+    println!("📁 [Backend] 目标目录: {:?}", target_dirs);
+
+    // 确保所有目标目录存在
+    for (tool_name, tool_dir) in &target_dirs {
+        fs::create_dir_all(tool_dir).map_err(|e| {
+            let err = format!("创建 {} skills 目录失败: {}", tool_name, e);
+            eprintln!("❌ [Backend] {}", err);
+            err
+        })?;
+    }
 
     // 从 URL 提取仓库名称
     let repo_name = repo_url
@@ -758,7 +878,7 @@ pub async fn install_skill_from_repo(repo_url: String, skill_names: Option<Vec<S
     };
 
     // 扫描并安装 skills
-    let installed_skills = install_skills_from_dir(&source_dir, &skills_dir, &repo_url, skill_names.as_ref())?;
+    let installed_skills = install_skills_from_dir(&source_dir, &target_dirs, &repo_url, skill_names.as_ref())?;
 
     // 清理临时目录
     if temp_dir.exists() {
@@ -773,10 +893,10 @@ pub async fn install_skill_from_repo(repo_url: String, skill_names: Option<Vec<S
     Ok(format!("成功安装 {} 个 skill: {}", installed_skills.len(), installed_skills.join(", ")))
 }
 
-/// 从目录中扫描并安装 skills（支持选择性安装）
+/// 从目录中扫描并安装 skills（支持选择性安装和多目标工具）
 fn install_skills_from_dir(
     source_dir: &PathBuf,
-    target_skills_dir: &PathBuf,
+    target_dirs: &Vec<(String, PathBuf)>,
     repo_url: &str,
     selected_skills: Option<&Vec<String>>,
 ) -> Result<Vec<String>, String> {
@@ -799,7 +919,7 @@ fn install_skills_from_dir(
             }
         }
 
-        install_single_skill(source_dir, target_skills_dir, skill_name, repo_url)?;
+        install_single_skill(source_dir, target_dirs, skill_name, repo_url)?;
         installed.push(skill_name.to_string());
         return Ok(installed);
     }
@@ -825,7 +945,7 @@ fn install_skills_from_dir(
                         }
 
                         println!("📦 [Backend] 发现 skill: {}", skill_name);
-                        match install_single_skill(&path, target_skills_dir, skill_name, repo_url) {
+                        match install_single_skill(&path, target_dirs, skill_name, repo_url) {
                             Ok(_) => {
                                 installed.push(skill_name.to_string());
                             }
@@ -842,27 +962,50 @@ fn install_skills_from_dir(
     Ok(installed)
 }
 
-/// 安装单个 skill
+/// 安装单个 skill 到多个目标工具
 fn install_single_skill(
     source_path: &PathBuf,
-    target_skills_dir: &PathBuf,
+    target_dirs: &Vec<(String, PathBuf)>,
     skill_name: &str,
     repo_url: &str,
 ) -> Result<(), String> {
-    let target_dir = target_skills_dir.join(skill_name);
+    let mut installed_tools = Vec::new();
 
-    // 检查是否已存在
-    if target_dir.exists() {
-        println!("⚠️  [Backend] Skill '{}' 已存在，跳过", skill_name);
-        return Err(format!("Skill '{}' 已存在", skill_name));
+    // 安装到所有目标工具目录
+    for (tool_name, tool_skills_dir) in target_dirs {
+        let target_dir = tool_skills_dir.join(skill_name);
+
+        // 检查是否已存在
+        if target_dir.exists() {
+            println!("⚠️  [Backend] Skill '{}' 在 {} 中已存在，跳过", skill_name, tool_name);
+            continue;
+        }
+
+        // 复制目录
+        match copy_dir_recursive(source_path, &target_dir) {
+            Ok(_) => {
+                println!("✅ [Backend] 成功安装 {} 到 {}", skill_name, tool_name);
+                installed_tools.push(tool_name.clone());
+            }
+            Err(e) => {
+                eprintln!("⚠️  [Backend] 安装 {} 到 {} 失败: {}", skill_name, tool_name, e);
+            }
+        }
     }
 
-    // 复制目录
-    copy_dir_recursive(source_path, &target_dir)
-        .map_err(|e| format!("复制目录失败: {}", e))?;
+    if installed_tools.is_empty() {
+        return Err(format!("Skill '{}' 在所有目标工具中都已存在", skill_name));
+    }
+
+    // 只在第一个成功安装的目录中读取 metadata
+    let first_tool_dir = target_dirs
+        .iter()
+        .find(|(name, _)| installed_tools.contains(name))
+        .map(|(_, dir)| dir.join(skill_name))
+        .ok_or_else(|| "无法找到已安装的目录".to_string())?;
 
     // 解析 SKILL.md 的 frontmatter
-    let skill_md_path = target_dir.join("SKILL.md");
+    let skill_md_path = first_tool_dir.join("SKILL.md");
     let mut metadata: Option<SkillMetadata> = None;
 
     if skill_md_path.exists() {
@@ -876,7 +1019,7 @@ fn install_single_skill(
 
     // 如果没有从 SKILL.md 解析到 metadata，尝试读取 metadata.json
     if metadata.is_none() {
-        let metadata_path = target_dir.join("metadata.json");
+        let metadata_path = first_tool_dir.join("metadata.json");
         if metadata_path.exists() {
             metadata = fs::read_to_string(&metadata_path)
                 .ok()
@@ -908,8 +1051,10 @@ fn install_single_skill(
     // 检查是否已存在该 skill
     if let Some(existing) = registry.skills.iter_mut().find(|s| s.name == skill_name) {
         // 已存在，更新安装工具列表
-        if !existing.installed_by.contains(&"claude-code".to_string()) {
-            existing.installed_by.push("claude-code".to_string());
+        for tool_name in &installed_tools {
+            if !existing.installed_by.contains(tool_name) {
+                existing.installed_by.push(tool_name.clone());
+            }
         }
         existing.installed_at = Some(now);
         if metadata.is_some() {
@@ -922,7 +1067,7 @@ fn install_single_skill(
             name: skill_name.to_string(),
             description: metadata.as_ref().and_then(|m| m.description.clone()),
             enabled: true,
-            installed_by: vec!["claude-code".to_string()],
+            installed_by: installed_tools.clone(),
             installed_at: Some(now),
             metadata,
         });
@@ -931,9 +1076,14 @@ fn install_single_skill(
     write_skill_registry(registry)
         .map_err(|e| format!("写入注册表失败: {}", e))?;
 
-    // 生成清单文件
-    let manifest = generate_skill_manifest(&target_dir, Some(repo_url))?;
-    write_skill_manifest(&target_dir, &manifest)?;
+    // 为每个安装的工具生成清单文件
+    for (tool_name, tool_skills_dir) in target_dirs {
+        if installed_tools.contains(tool_name) {
+            let target_dir = tool_skills_dir.join(skill_name);
+            let manifest = generate_skill_manifest(&target_dir, Some(repo_url))?;
+            write_skill_manifest(&target_dir, &manifest)?;
+        }
+    }
 
     println!("✅ [Backend] Skill '{}' 安装成功", skill_name);
     Ok(())
@@ -1855,4 +2005,100 @@ pub fn set_skill_repository(skill_name: String, repository: String) -> Result<()
 
     println!("✅ [Backend] 仓库地址设置成功");
     Ok(())
+}
+
+/// 将已安装的 Skill 应用到其他 AI 工具
+#[tauri::command]
+pub fn apply_skill_to_tools(
+    skill_name: String,
+    target_tools: Vec<String>,
+) -> Result<String, String> {
+    println!("🔧 [Backend] 开始应用 Skill 到其他工具");
+    println!("📦 [Backend] Skill: {}", skill_name);
+    println!("🎯 [Backend] 目标工具: {:?}", target_tools);
+
+    // 获取源 Skill 目录（从 claude-code 或 disabled_skills）
+    let skills_dir = get_skills_dir()?;
+    let disabled_skills_dir = get_claude_dir()?.join(".disabled_skills");
+
+    let source_dir = if skills_dir.join(&skill_name).exists() {
+        skills_dir.join(&skill_name)
+    } else if disabled_skills_dir.join(&skill_name).exists() {
+        disabled_skills_dir.join(&skill_name)
+    } else {
+        return Err(format!("Skill '{}' 不存在", skill_name));
+    };
+
+    // 获取目标工具的目录列表
+    let target_dirs = get_target_tool_dirs(&target_tools)?;
+
+    let mut installed_tools = Vec::new();
+    let mut skipped_tools = Vec::new();
+
+    // 复制到所有目标工具目录
+    for (tool_name, tool_skills_dir) in &target_dirs {
+        let target_dir = tool_skills_dir.join(&skill_name);
+
+        // 确保目标工具的 skills 目录存在
+        fs::create_dir_all(tool_skills_dir).map_err(|e| {
+            format!("创建 {} skills 目录失败: {}", tool_name, e)
+        })?;
+
+        // 检查是否已存在
+        if target_dir.exists() {
+            println!("⚠️  [Backend] Skill '{}' 在 {} 中已存在，跳过", skill_name, tool_name);
+            skipped_tools.push(tool_name.clone());
+            continue;
+        }
+
+        // 复制目录
+        match copy_dir_recursive(&source_dir, &target_dir) {
+            Ok(_) => {
+                println!("✅ [Backend] 成功应用 {} 到 {}", skill_name, tool_name);
+                installed_tools.push(tool_name.clone());
+            }
+            Err(e) => {
+                eprintln!("⚠️  [Backend] 应用 {} 到 {} 失败: {}", skill_name, tool_name, e);
+            }
+        }
+    }
+
+    if installed_tools.is_empty() {
+        if skipped_tools.is_empty() {
+            return Err("应用失败".to_string());
+        } else {
+            return Err(format!("Skill '{}' 在所有目标工具中都已存在", skill_name));
+        }
+    }
+
+    // 更新注册表
+    let mut registry = read_skill_registry()
+        .map_err(|e| format!("读取注册表失败: {}", e))?;
+
+    if let Some(entry) = registry.skills.iter_mut().find(|s| s.name == skill_name) {
+        // 更新安装工具列表
+        for tool_name in &installed_tools {
+            if !entry.installed_by.contains(tool_name) {
+                entry.installed_by.push(tool_name.clone());
+            }
+        }
+    }
+
+    write_skill_registry(registry)
+        .map_err(|e| format!("写入注册表失败: {}", e))?;
+
+    let message = if skipped_tools.is_empty() {
+        format!("成功应用到 {} 个工具: {}", installed_tools.len(), installed_tools.join(", "))
+    } else {
+        format!(
+            "成功应用到 {} 个工具: {}；已跳过 {} 个工具: {}",
+            installed_tools.len(),
+            installed_tools.join(", "),
+            skipped_tools.len(),
+            skipped_tools.join(", ")
+        )
+    };
+
+    println!("🎉 [Backend] {}", message);
+    Ok(message)
 }
