@@ -360,6 +360,7 @@ pub async fn refresh_marketplace(source_id: String) -> Result<MarketplaceCache, 
         .clone();
 
     println!("🔍 开始刷新市场源: {}", source.name);
+    println!("📍 仓库地址: {}", source.url);
 
     // 从 URL 提取仓库名称
     let repo_name = source
@@ -370,14 +371,21 @@ pub async fn refresh_marketplace(source_id: String) -> Result<MarketplaceCache, 
         .ok_or_else(|| "无效的仓库 URL".to_string())?
         .trim_end_matches(".git");
 
+    println!("📦 仓库名称: {}", repo_name);
+
     // 创建临时目录用于克隆
     let temp_dir = std::env::temp_dir().join(format!("cobalt-source-scan-{}", repo_name));
+    println!("📂 临时目录: {}", temp_dir.display());
+
     if temp_dir.exists() {
+        println!("🧹 清理旧的临时目录...");
         fs::remove_dir_all(&temp_dir).map_err(|e| format!("删除临时目录失败: {}", e))?;
     }
 
     // 克隆仓库到临时目录（浅克隆）
     println!("⏳ 开始克隆仓库...");
+    println!("🔧 执行命令: git clone --depth 1 {} {}", source.url, temp_dir.display());
+
     let output = Command::new("git")
         .args(&["clone", "--depth", "1", &source.url, temp_dir.to_str().unwrap()])
         .env("GIT_TERMINAL_PROMPT", "0")  // 禁用交互式提示
@@ -387,14 +395,21 @@ pub async fn refresh_marketplace(source_id: String) -> Result<MarketplaceCache, 
 
     if !output.status.success() {
         let error = String::from_utf8_lossy(&output.stderr);
+        println!("❌ 克隆失败: {}", error);
         return Err(format!("克隆仓库失败: {}。提示：请确保仓库 URL 正确且可公开访问", error));
     }
+
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    if !stdout.is_empty() {
+        println!("📝 Git 输出:\n{}", stdout);
+    }
+
     println!("✅ 仓库克隆成功");
 
     // 检查是否有 skills 子目录
     let skills_subdir = temp_dir.join("skills");
     let source_dir = if skills_subdir.exists() && skills_subdir.is_dir() {
-        println!("✅ 发现 skills/ 子目录");
+        println!("✅ 发现 skills/ 子目录: {}", skills_subdir.display());
         skills_subdir
     } else {
         println!("📝 未找到 skills/ 子目录，将整个仓库作为单个 skill");
@@ -402,9 +417,11 @@ pub async fn refresh_marketplace(source_id: String) -> Result<MarketplaceCache, 
     };
 
     // 扫描 skills
+    println!("🔍 开始扫描 skills...");
     let skills = scan_marketplace_skills(&source_dir)?;
 
     // 清理临时目录
+    println!("🧹 清理临时目录...");
     if temp_dir.exists() {
         let _ = fs::remove_dir_all(&temp_dir);
     }
@@ -417,9 +434,11 @@ pub async fn refresh_marketplace(source_id: String) -> Result<MarketplaceCache, 
         skills: skills.clone(),
     };
 
+    println!("💾 写入缓存文件...");
     // 写入缓存
     write_marketplace_cache(&cache)?;
 
+    println!("📝 更新市场源配置...");
     // 更新市场源的 lastRefreshed 和 skillCount
     let source_mut = config
         .sources
@@ -430,7 +449,7 @@ pub async fn refresh_marketplace(source_id: String) -> Result<MarketplaceCache, 
     source_mut.skill_count = skills.len();
     write_marketplace_config(&config)?;
 
-    println!("🎉 扫描到 {} 个 skill(s)", skills.len());
+    println!("🎉 刷新完成！扫描到 {} 个 skill(s)", skills.len());
     Ok(cache)
 }
 
