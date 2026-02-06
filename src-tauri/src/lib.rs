@@ -17,6 +17,9 @@ use commands::{
     add_marketplace, get_marketplace_skills, install_skill_from_marketplace, list_marketplace,
     refresh_all_marketplace, refresh_marketplace, remove_marketplace, toggle_marketplace,
     update_marketplace, init_default_sources,
+    // 工作区命令
+    list_workspaces, add_workspace, remove_workspace, switch_workspace,
+    get_current_workspace, update_workspace, refresh_workspace, init_workspace_skills_dir,
 };
 
 #[cfg(target_os = "macos")]
@@ -75,6 +78,7 @@ pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_updater::Builder::new().build())
+        .plugin(tauri_plugin_dialog::init())
         .invoke_handler(tauri::generate_handler![
             // 配置命令
             get_claude_config_dir,
@@ -117,6 +121,15 @@ pub fn run() {
             get_marketplace_skills,
             install_skill_from_marketplace,
             init_default_sources,
+            // 工作区命令
+            list_workspaces,
+            add_workspace,
+            remove_workspace,
+            switch_workspace,
+            get_current_workspace,
+            update_workspace,
+            refresh_workspace,
+            init_workspace_skills_dir,
             // 窗口主题
             set_window_theme,
         ])

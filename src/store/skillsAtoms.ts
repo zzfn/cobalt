@@ -6,6 +6,7 @@ import type {
   SkillSortOption,
   AiToolType,
 } from '@/types/skills';
+import type { WorkspaceScope } from '@/types/workspace';
 
 // Skills 列表
 export const skillsListAtom = atom<SkillRegistryEntry[]>([]);
@@ -31,6 +32,9 @@ export const skillsLoadingAtom = atom<boolean>(false);
 
 // Skills 错误状态
 export const skillsErrorAtom = atom<string | null>(null);
+
+// Skills 范围（全局或项目）- 用于 UI 显示
+export const skillsScopeAtom = atom<WorkspaceScope>('global');
 
 // 派生 atom：过滤后的 Skills 列表
 export const filteredSkillsAtom = atom((get) => {

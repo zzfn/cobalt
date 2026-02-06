@@ -113,9 +113,12 @@ function toSkillDetail(detail: BackendSkillDetail): SkillDetail {
 
 /**
  * 获取所有已安装的 Skills
+ * @param workspacePath 可选的工作区路径，如果提供则获取工作区的 skills
  */
-export async function listInstalledSkills(): Promise<SkillRegistryEntry[]> {
-  const skills = await invoke<BackendSkillEntry[]>('list_installed_skills');
+export async function listInstalledSkills(workspacePath?: string | null): Promise<SkillRegistryEntry[]> {
+  const skills = await invoke<BackendSkillEntry[]>('list_installed_skills', {
+    workspacePath: workspacePath ?? null,
+  });
   return skills.map(toSkillRegistryEntry);
 }
 
@@ -178,15 +181,24 @@ export async function scanRepoSkills(repoUrl: string): Promise<import('@/types/s
 }
 
 /**
- * 从远程仓库安装 Skill（支持选择性安装）
+ * 从远程仓库安装 Skill（支持选择性安装和选择目标工具）
  */
-export async function installSkillFromRepo(repoUrl: string, skillNames?: string[]): Promise<string> {
+export async function installSkillFromRepo(
+  repoUrl: string,
+  skillNames?: string[],
+  targetTools?: string[]
+): Promise<string> {
   console.log('📡 [Service] installSkillFromRepo 被调用');
   console.log('📦 [Service] 仓库 URL:', repoUrl);
   console.log('📝 [Service] 指定安装:', skillNames);
+  console.log('🎯 [Service] 目标工具:', targetTools);
 
   try {
-    const result = await invoke<string>('install_skill_from_repo', { repoUrl, skillNames });
+    const result = await invoke<string>('install_skill_from_repo', {
+      repoUrl,
+      skillNames,
+      targetTools: targetTools || null
+    });
     console.log('✅ [Service] 安装成功:', result);
     return result;
   } catch (error) {

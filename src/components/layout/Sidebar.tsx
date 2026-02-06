@@ -22,6 +22,7 @@ import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import { Separator } from '@/components/ui/separator';
 import { sidebarCollapsedAtom, themeAtom, resolvedThemeAtom } from '@/store/uiAtoms';
+import WorkspaceSelector from '@/components/workspace/WorkspaceSelector';
 
 interface NavItem {
   title: string;
@@ -184,6 +185,11 @@ export default function Sidebar() {
         ) : (
           <span className="text-lg font-bold">C</span>
         )}
+      </div>
+
+      {/* 工作区选择器 */}
+      <div className={cn('border-b p-2', collapsed && 'flex justify-center')}>
+        <WorkspaceSelector collapsed={collapsed} />
       </div>
 
       {/* 导航 */}

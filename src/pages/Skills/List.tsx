@@ -1,6 +1,6 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import { useAtom, useAtomValue, useSetAtom } from 'jotai';
-import { Sparkles, Search, Filter, RefreshCw, Plus, Loader2, CheckCircle2 } from 'lucide-react';
+import { Sparkles, Search, Filter, RefreshCw, Plus, Loader2, CheckCircle2, Globe, Folder } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import {
@@ -24,7 +24,11 @@ import {
   skillsFilterAtom,
   skillsLoadingAtom,
   skillsErrorAtom,
+  skillsScopeAtom,
 } from '@/store/skillsAtoms';
+import {
+  currentWorkspaceAtom,
+} from '@/store/workspaceAtoms';
 import {
   listInstalledSkills,
   toggleSkill as toggleSkillApi,
@@ -42,6 +46,8 @@ export default function SkillsList() {
   const filteredSkills = useAtomValue(filteredSkillsAtom);
   const [loading, setLoading] = useAtom(skillsLoadingAtom);
   const setError = useSetAtom(skillsErrorAtom);
+  const [skillsScope, setSkillsScope] = useAtom(skillsScopeAtom);
+  const currentWorkspace = useAtomValue(currentWorkspaceAtom);
 
   // 安装对话框状态
   const [installDialogOpen, setInstallDialogOpen] = useState(false);
@@ -51,6 +57,7 @@ export default function SkillsList() {
   const [installError, setInstallError] = useState<string | null>(null);
   const [scannedSkills, setScannedSkills] = useState<ScannedSkillInfo[]>([]);
   const [selectedSkills, setSelectedSkills] = useState<Set<string>>(new Set());
+  const [selectedTools, setSelectedTools] = useState<Set<string>>(new Set(['claude-code']));
 
   // 创建对话框状态
   const [createDialogOpen, setCreateDialogOpen] = useState(false);
@@ -64,12 +71,15 @@ export default function SkillsList() {
   const [createError, setCreateError] = useState<string | null>(null);
 
   // 加载 Skills 数据
-  const loadSkills = async () => {
+  const loadSkills = useCallback(async () => {
     setLoading(true);
     setError(null);
     try {
-      const data = await listInstalledSkills();
+      // 根据当前工作区决定加载哪个目录的 skills
+      const workspacePath = currentWorkspace?.path ?? null;
+      const data = await listInstalledSkills(workspacePath);
       setSkills(data);
+      setSkillsScope(currentWorkspace ? 'project' : 'global');
     } catch (err) {
       const message = err instanceof Error ? err.message : '加载 Skills 失败';
       setError(message);
@@ -77,12 +87,24 @@ export default function SkillsList() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [currentWorkspace, setSkills, setLoading, setError, setSkillsScope]);
 
   // 初始加载
   useEffect(() => {
     loadSkills();
-  }, []);
+  }, [loadSkills]);
+
+  // 监听工作区切换事件
+  useEffect(() => {
+    const handleWorkspaceChanged = () => {
+      loadSkills();
+    };
+
+    window.addEventListener('workspace-changed', handleWorkspaceChanged);
+    return () => {
+      window.removeEventListener('workspace-changed', handleWorkspaceChanged);
+    };
+  }, [loadSkills]);
 
   const handleToggleSkill = async (skillId: string, enabled: boolean) => {
     const skill = skills.find((s) => s.id === skillId);
@@ -133,7 +155,8 @@ export default function SkillsList() {
       setSelectedSkills(new Set(uninstalledSkills));
     } catch (err) {
       console.error('❌ 扫描失败:', err);
-      const message = err instanceof Error ? err.message : '扫描失败';
+      // Tauri invoke 错误可能是字符串或 Error 对象
+      const message = typeof err === 'string' ? err : (err instanceof Error ? err.message : '扫描失败');
       setInstallError(message);
     } finally {
       console.log('🏁 扫描流程结束');
@@ -144,9 +167,15 @@ export default function SkillsList() {
   const handleInstallSkill = async () => {
     console.log('🔧 handleInstallSkill 被调用');
     console.log('📦 选中的 skills:', Array.from(selectedSkills));
+    console.log('🎯 选中的工具:', Array.from(selectedTools));
 
     if (selectedSkills.size === 0) {
       setInstallError('请至少选择一个 Skill');
+      return;
+    }
+
+    if (selectedTools.size === 0) {
+      setInstallError('请至少选择一个目标工具');
       return;
     }
 
@@ -156,18 +185,24 @@ export default function SkillsList() {
 
     try {
       console.log('📡 调用 installSkillFromRepo...');
-      const result = await installSkillFromRepo(repoUrl, Array.from(selectedSkills));
+      const result = await installSkillFromRepo(
+        repoUrl,
+        Array.from(selectedSkills),
+        Array.from(selectedTools)
+      );
       console.log('✅ 安装成功:', result);
       alert(`安装成功！\n\n${result}`);
       setInstallDialogOpen(false);
       setRepoUrl('');
       setScannedSkills([]);
       setSelectedSkills(new Set());
+      setSelectedTools(new Set(['claude-code']));
       // 重新加载列表
       await loadSkills();
     } catch (err) {
       console.error('❌ 安装失败:', err);
-      const message = err instanceof Error ? err.message : '安装失败';
+      // Tauri invoke 错误可能是字符串或 Error 对象
+      const message = typeof err === 'string' ? err : (err instanceof Error ? err.message : '安装失败');
       setInstallError(message);
     } finally {
       console.log('🏁 安装流程结束');
@@ -182,6 +217,18 @@ export default function SkillsList() {
         newSet.delete(skillName);
       } else {
         newSet.add(skillName);
+      }
+      return newSet;
+    });
+  };
+
+  const toggleToolSelection = (toolName: string) => {
+    setSelectedTools(prev => {
+      const newSet = new Set(prev);
+      if (newSet.has(toolName)) {
+        newSet.delete(toolName);
+      } else {
+        newSet.add(toolName);
       }
       return newSet;
     });
@@ -251,9 +298,27 @@ export default function SkillsList() {
         <div className="flex items-center gap-3">
           <Sparkles className="h-8 w-8" />
           <div>
-            <h1 className="text-2xl font-bold">Skills 管理</h1>
+            <div className="flex items-center gap-2">
+              <h1 className="text-2xl font-bold">Skills 管理</h1>
+              {/* 工作区标签 */}
+              <Badge variant={skillsScope === 'global' ? 'secondary' : 'default'} className="gap-1">
+                {skillsScope === 'global' ? (
+                  <>
+                    <Globe className="h-3 w-3" />
+                    全局
+                  </>
+                ) : (
+                  <>
+                    <Folder className="h-3 w-3" />
+                    {currentWorkspace?.name}
+                  </>
+                )}
+              </Badge>
+            </div>
             <p className="text-muted-foreground">
-              管理和配置 Claude 的 Skills
+              {skillsScope === 'global'
+                ? '管理全局 Claude Skills'
+                : `管理 ${currentWorkspace?.name} 工作区的 Skills`}
             </p>
           </div>
         </div>
@@ -404,9 +469,16 @@ export default function SkillsList() {
                     </Button>
                   </div>
                   <p className="text-xs text-muted-foreground">
-                    支持 GitHub、GitLab 等 Git 仓库
+                    支持 GitHub、GitLab 等公开 Git 仓库（私有仓库需先配置 Git 凭据）
                   </p>
                 </div>
+
+                {/* 错误提示 - 放在 URL 输入框下方，更醒目 */}
+                {installError && (
+                  <div className="rounded-lg border border-destructive/50 bg-destructive/10 p-3">
+                    <p className="text-sm text-destructive whitespace-pre-line">{installError}</p>
+                  </div>
+                )}
 
                 {/* 扫描到的 Skills 列表 */}
                 {scannedSkills.length > 0 && (
@@ -490,9 +562,67 @@ export default function SkillsList() {
                   </div>
                 )}
 
-                {/* 错误提示 */}
-                {installError && (
-                  <p className="text-sm text-destructive">{installError}</p>
+                {/* 目标工具选择 */}
+                {scannedSkills.length > 0 && (
+                  <div className="space-y-3">
+                    <div className="flex items-center justify-between">
+                      <Label>选择目标 AI 工具 ({selectedTools.size})</Label>
+                      <div className="flex gap-2">
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => {
+                            const allTools = toolFilters
+                              .filter(t => t.value !== 'all')
+                              .map(t => t.value);
+                            setSelectedTools(new Set(allTools));
+                          }}
+                        >
+                          全选
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => setSelectedTools(new Set())}
+                        >
+                          取消全选
+                        </Button>
+                      </div>
+                    </div>
+                    <div className="grid grid-cols-2 gap-2">
+                      {toolFilters
+                        .filter(tool => tool.value !== 'all')
+                        .map((tool) => (
+                          <div
+                            key={tool.value}
+                            className={cn(
+                              'flex items-center gap-3 p-3 rounded-lg border transition-colors cursor-pointer',
+                              selectedTools.has(tool.value)
+                                ? 'bg-primary/5 border-primary'
+                                : 'hover:bg-muted/50'
+                            )}
+                            onClick={() => toggleToolSelection(tool.value)}
+                          >
+                            <Checkbox
+                              id={`tool-${tool.value}`}
+                              checked={selectedTools.has(tool.value)}
+                              onCheckedChange={() => toggleToolSelection(tool.value)}
+                              disabled={installing}
+                            />
+                            <Label
+                              htmlFor={`tool-${tool.value}`}
+                              className="flex items-center gap-2 cursor-pointer flex-1"
+                            >
+                              <span>{tool.icon}</span>
+                              <span className="font-medium">{tool.label}</span>
+                            </Label>
+                          </div>
+                        ))}
+                    </div>
+                    <p className="text-xs text-muted-foreground">
+                      💡 Skill 将被安装到选中工具的 skills 目录中
+                    </p>
+                  </div>
                 )}
 
                 {/* 按钮 */}
@@ -504,6 +634,7 @@ export default function SkillsList() {
                       setInstallError(null);
                       setScannedSkills([]);
                       setSelectedSkills(new Set());
+                      setSelectedTools(new Set(['claude-code']));
                       setRepoUrl('');
                     }}
                     disabled={scanning || installing}

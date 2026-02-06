@@ -111,6 +111,23 @@
       "rlig" 1,
       "calt" 1;
   }
+
+  /* Placeholder 样式 */
+  ::placeholder {
+    @apply text-muted-foreground/40;
+  }
+
+  ::-webkit-input-placeholder {
+    @apply text-muted-foreground/40;
+  }
+
+  ::-moz-placeholder {
+    @apply text-muted-foreground/40;
+  }
+
+  :-ms-input-placeholder {
+    @apply text-muted-foreground/40;
+  }
 }
 
 /* Markdown 预览样式 */

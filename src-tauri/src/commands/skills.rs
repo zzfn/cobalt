@@ -2,6 +2,127 @@
 use serde::{Deserialize, Serialize};
 use std::fs;
 use std::path::PathBuf;
+use std::process::Command;
+
+/// 将 HTTPS URL 转换为 SSH URL
+/// 例如: https://github.com/user/repo.git -> git@github.com:user/repo.git
+fn https_to_ssh_url(url: &str) -> Option<String> {
+    // 支持的格式:
+    // https://github.com/user/repo
+    // https://github.com/user/repo.git
+    // https://gitlab.com/user/repo
+    // https://git.example.com/user/repo
+
+    let url = url.trim().trim_end_matches('/');
+
+    if !url.starts_with("https://") && !url.starts_with("http://") {
+        return None;
+    }
+
+    // 移除协议前缀
+    let without_protocol = url
+        .trim_start_matches("https://")
+        .trim_start_matches("http://");
+
+    // 分割 host 和 path
+    let parts: Vec<&str> = without_protocol.splitn(2, '/').collect();
+    if parts.len() != 2 {
+        return None;
+    }
+
+    let host = parts[0];
+    let path = parts[1].trim_end_matches(".git");
+
+    Some(format!("git@{}:{}.git", host, path))
+}
+
+/// 克隆仓库，优先使用 HTTPS，失败后尝试 SSH
+fn clone_repo(url: &str, target_dir: &str, shallow: bool) -> Result<(), String> {
+    println!("⏳ [Backend] 开始克隆仓库...");
+
+    // 构建 git clone 参数
+    let mut args = vec!["clone"];
+    if shallow {
+        args.push("--depth");
+        args.push("1");
+    }
+    args.push(url);
+    args.push(target_dir);
+
+    // 尝试 HTTPS 克隆
+    let output = Command::new("git")
+        .args(&args)
+        .env("GIT_TERMINAL_PROMPT", "0")
+        .output()
+        .map_err(|e| format!("执行 git clone 失败: {}", e))?;
+
+    if output.status.success() {
+        println!("✅ [Backend] HTTPS 克隆成功");
+        return Ok(());
+    }
+
+    let https_error = String::from_utf8_lossy(&output.stderr);
+    println!("⚠️  [Backend] HTTPS 克隆失败: {}", https_error.trim());
+
+    // 如果 HTTPS 失败，尝试转换为 SSH URL
+    if let Some(ssh_url) = https_to_ssh_url(url) {
+        println!("🔄 [Backend] 尝试使用 SSH: {}", ssh_url);
+
+        // 清理可能创建的空目录
+        let _ = fs::remove_dir_all(target_dir);
+
+        let mut ssh_args = vec!["clone"];
+        if shallow {
+            ssh_args.push("--depth");
+            ssh_args.push("1");
+        }
+        ssh_args.push(&ssh_url);
+        ssh_args.push(target_dir);
+
+        let ssh_output = Command::new("git")
+            .args(&ssh_args)
+            .output()
+            .map_err(|e| format!("执行 git clone (SSH) 失败: {}", e))?;
+
+        if ssh_output.status.success() {
+            println!("✅ [Backend] SSH 克隆成功");
+            return Ok(());
+        }
+
+        let ssh_error = String::from_utf8_lossy(&ssh_output.stderr);
+        println!("❌ [Backend] SSH 克隆也失败: {}", ssh_error.trim());
+
+        // 两种方式都失败，返回更详细的错误
+        return Err(format!(
+            "克隆失败:\n• HTTPS: {}\n• SSH: {}\n\n请检查仓库地址是否正确，或配置 SSH 密钥",
+            https_error.trim(),
+            ssh_error.trim()
+        ));
+    }
+
+    // 无法转换为 SSH URL，返回 HTTPS 错误
+    Err(parse_git_clone_error(&https_error))
+}
+
+/// 解析 git clone 错误，返回用户友好的错误信息
+fn parse_git_clone_error(stderr: &str) -> String {
+    let stderr_lower = stderr.to_lowercase();
+
+    if stderr_lower.contains("authentication failed")
+        || stderr_lower.contains("could not read username")
+        || stderr_lower.contains("terminal prompts disabled")
+    {
+        "仓库需要认证。请确保：\n1. 仓库是公开的，或\n2. 已配置 Git 凭据或 SSH 密钥".to_string()
+    } else if stderr_lower.contains("repository not found")
+        || stderr_lower.contains("not found")
+    {
+        "仓库不存在或无访问权限".to_string()
+    } else if stderr_lower.contains("could not resolve host") {
+        "无法连接到 Git 服务器，请检查网络".to_string()
+    } else {
+        format!("克隆仓库失败: {}", stderr.trim())
+    }
+}
 
 /// Claude 配置目录路径
 fn get_claude_dir() -> Result<PathBuf, String> {
@@ -503,27 +624,47 @@ pub fn remove_skill_from_tools(
 }
 
 /// 获取所有已安装的 Skills（扫描多个 AI Tools 目录）
+/// workspace_path: 可选的工作区路径，如果提供则扫描工作区的 .claude/skills 目录
 #[tauri::command]
-pub fn list_installed_skills() -> Result<Vec<SkillRegistryEntry>, String> {
-    let skills_dir = get_skills_dir()?;
-    let disabled_skills_dir = get_claude_dir()?.join(".disabled_skills");
+pub fn list_installed_skills(workspace_path: Option<String>) -> Result<Vec<SkillRegistryEntry>, String> {
+    // 根据是否提供工作区路径决定扫描目录
+    let (skills_dir, disabled_skills_dir) = if let Some(ref ws_path) = workspace_path {
+        let ws_path_buf = PathBuf::from(ws_path);
+        let ws_skills_dir = ws_path_buf.join(".claude").join("skills");
+        let ws_disabled_dir = ws_path_buf.join(".claude").join(".disabled_skills");
+        println!("📁 [Backend] 扫描工作区 skills: {:?}", ws_skills_dir);
+        (ws_skills_dir, ws_disabled_dir)
+    } else {
+        let global_skills_dir = get_skills_dir()?;
+        let global_disabled_dir = get_claude_dir()?.join(".disabled_skills");
+        println!("🌐 [Backend] 扫描全局 skills: {:?}", global_skills_dir);
+        (global_skills_dir, global_disabled_dir)
+    };
 
-    // 首先扫描所有 AI Tools 的目录，建立 skill -> tools 映射
-    let tool_dirs = get_all_tool_skills_dirs();
+    // 如果是全局模式，扫描所有 AI Tools 的目录，建立 skill -> tools 映射
     let mut skill_to_tools: std::collections::HashMap<String, Vec<String>> = std::collections::HashMap::new();
 
-    for (tool_name, tool_dir) in &tool_dirs {
-        let tool_skills = scan_skills_in_dir(tool_dir);
-        for skill_name in tool_skills {
-            skill_to_tools
-                .entry(skill_name)
-                .or_insert_with(Vec::new)
-                .push(tool_name.to_string());
+    if workspace_path.is_none() {
+        let tool_dirs = get_all_tool_skills_dirs();
+        for (tool_name, tool_dir) in &tool_dirs {
+            let tool_skills = scan_skills_in_dir(tool_dir);
+            for skill_name in tool_skills {
+                skill_to_tools
+                    .entry(skill_name)
+                    .or_insert_with(Vec::new)
+                    .push(tool_name.to_string());
+            }
         }
     }
 
     let mut skills = Vec::new();
-    let registry = read_skill_registry()?;
+
+    // 只有全局模式才读取注册表
+    let registry = if workspace_path.is_none() {
+        read_skill_registry()?
+    } else {
+        SkillRegistry::default()
+    };
 
     // 扫描启用的 skills 目录
     if skills_dir.exists() {
@@ -662,8 +803,6 @@ pub struct ScannedSkillInfo {
 
 #[tauri::command]
 pub async fn scan_repo_skills(repo_url: String) -> Result<Vec<ScannedSkillInfo>, String> {
-    use std::process::Command;
-
     println!("🔍 [Backend] 开始扫描仓库中的 Skills");
     println!("📦 [Backend] 仓库 URL: {}", repo_url);
 
@@ -681,18 +820,8 @@ pub async fn scan_repo_skills(repo_url: String) -> Result<Vec<ScannedSkillInfo>,
         fs::remove_dir_all(&temp_dir).map_err(|e| format!("删除临时目录失败: {}", e))?;
     }
 
-    // 克隆仓库到临时目录（浅克隆）
-    println!("⏳ [Backend] 开始克隆仓库...");
-    let output = Command::new("git")
-        .args(&["clone", "--depth", "1", &repo_url, temp_dir.to_str().unwrap()])
-        .output()
-        .map_err(|e| format!("执行 git clone 失败: {}", e))?;
-
-    if !output.status.success() {
-        let error = String::from_utf8_lossy(&output.stderr);
-        return Err(format!("克隆仓库失败: {}", error));
-    }
-    println!("✅ [Backend] 仓库克隆成功");
+    // 克隆仓库（浅克隆，HTTPS 失败会自动尝试 SSH）
+    clone_repo(&repo_url, temp_dir.to_str().unwrap(), true)?;
 
     // 检查是否有 skills 子目录
     let skills_subdir = temp_dir.join("skills");
@@ -796,7 +925,6 @@ pub async fn install_skill_from_repo(
     skill_names: Option<Vec<String>>,
     target_tools: Option<Vec<String>>,
 ) -> Result<String, String> {
-    use std::process::Command;
 
     println!("🔧 [Backend] 开始安装 Skill");
     println!("📦 [Backend] 仓库 URL: {}", repo_url);
@@ -848,24 +976,8 @@ pub async fn install_skill_from_repo(
 
     println!("📂 [Backend] 临时目录: {:?}", temp_dir);
 
-    // 克隆仓库到临时目录
-    println!("⏳ [Backend] 开始克隆仓库...");
-    let output = Command::new("git")
-        .args(&["clone", &repo_url, temp_dir.to_str().unwrap()])
-        .output()
-        .map_err(|e| {
-            let err = format!("执行 git clone 失败: {}", e);
-            eprintln!("❌ [Backend] {}", err);
-            err
-        })?;
-
-    if !output.status.success() {
-        let error = String::from_utf8_lossy(&output.stderr);
-        let err = format!("克隆仓库失败: {}", error);
-        eprintln!("❌ [Backend] {}", err);
-        return Err(err);
-    }
-    println!("✅ [Backend] 仓库克隆成功");
+    // 克隆仓库（完整克隆，HTTPS 失败会自动尝试 SSH）
+    clone_repo(&repo_url, temp_dir.to_str().unwrap(), false)?;
 
     // 检查是否有 skills 子目录
     let skills_subdir = temp_dir.join("skills");
@@ -1514,8 +1626,6 @@ pub struct SkillUpdateCheckResult {
 /// 检查 Skill 是否有更新（基于文件 hash 对比）
 #[tauri::command]
 pub async fn check_skill_update(skill_name: String) -> Result<SkillUpdateCheckResult, String> {
-    use std::process::Command;
-
     println!("🔍 [Backend] 检查 Skill '{}' 的更新", skill_name);
 
     // 获取 skill 目录
@@ -1591,15 +1701,9 @@ pub async fn check_skill_update(skill_name: String) -> Result<SkillUpdateCheckRe
         let _ = fs::remove_dir_all(&temp_dir);
     }
 
-    // 克隆仓库（浅克隆，只获取最新版本）
+    // 克隆仓库（浅克隆，HTTPS 失败会自动尝试 SSH）
     println!("📡 [Backend] 克隆远程仓库: {}", repo_url);
-    let output = Command::new("git")
-        .args(&["clone", "--depth", "1", &repo_url, temp_dir.to_str().unwrap()])
-        .output()
-        .map_err(|e| format!("执行 git clone 失败: {}", e))?;
-
-    if !output.status.success() {
-        let error = String::from_utf8_lossy(&output.stderr);
+    if let Err(e) = clone_repo(&repo_url, temp_dir.to_str().unwrap(), true) {
         return Ok(SkillUpdateCheckResult {
             has_update: false,
             current_version,
@@ -1609,7 +1713,7 @@ pub async fn check_skill_update(skill_name: String) -> Result<SkillUpdateCheckRe
             changed_files: None,
             new_files: None,
             removed_files: None,
-            error: Some(format!("克隆远程仓库失败: {}", error)),
+            error: Some(e),
         });
     }
 
@@ -1758,8 +1862,6 @@ fn compare_manifests(
 /// 更新 Skill 到最新版本
 #[tauri::command]
 pub async fn update_skill(skill_name: String) -> Result<String, String> {
-    use std::process::Command;
-
     println!("🔄 [Backend] 开始更新 Skill '{}'", skill_name);
 
     let skills_dir = get_skills_dir()?;
@@ -1824,17 +1926,10 @@ pub async fn update_skill(skill_name: String) -> Result<String, String> {
         let _ = fs::remove_dir_all(&temp_dir);
     }
 
-    // 克隆仓库
-    println!("⏳ [Backend] 克隆仓库...");
-    let output = Command::new("git")
-        .args(&["clone", &repo_url, temp_dir.to_str().unwrap()])
-        .output()
-        .map_err(|e| format!("执行 git clone 失败: {}", e))?;
-
-    if !output.status.success() {
+    // 克隆仓库（完整克隆，HTTPS 失败会自动尝试 SSH）
+    if let Err(e) = clone_repo(&repo_url, temp_dir.to_str().unwrap(), false) {
         let _ = fs::remove_dir_all(&backup_dir);
-        let error = String::from_utf8_lossy(&output.stderr);
-        return Err(format!("克隆仓库失败: {}", error));
+        return Err(e);
     }
 
     // 检查是否有 skills 子目录

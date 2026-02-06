@@ -324,32 +324,34 @@ export default function MarketplaceList() {
               className="hover:shadow-lg transition-shadow cursor-pointer flex flex-col"
               onClick={() => navigate(`/skills/marketplace/${source.id}`)}
             >
-              <CardHeader className="flex-1">
-                <div className="flex items-start justify-between">
+              <CardHeader className="flex-1 pb-3">
+                <div className="flex items-start justify-between gap-2">
                   <div className="flex-1 min-w-0">
-                    <CardTitle className="flex items-center gap-2 flex-wrap">
-                      <span className="break-all">{source.name}</span>
-                      {!source.enabled && (
-                        <Badge variant="secondary" className="text-xs shrink-0">
-                          已禁用
-                        </Badge>
-                      )}
+                    <CardTitle className="text-base font-semibold truncate" title={source.name}>
+                      {source.name}
                     </CardTitle>
-                    <CardDescription className="mt-2 line-clamp-2">
+                    <CardDescription className="mt-1.5 line-clamp-2 text-sm">
                       {source.description || '暂无描述'}
                     </CardDescription>
                   </div>
-                </div>
-                <div className="flex flex-wrap gap-1 mt-2">
-                  {source.tags.map((tag) => (
-                    <Badge key={tag} variant="outline" className="text-xs">
-                      {tag}
+                  {!source.enabled && (
+                    <Badge variant="secondary" className="text-xs shrink-0">
+                      已禁用
                     </Badge>
-                  ))}
+                  )}
                 </div>
+                {source.tags.length > 0 && (
+                  <div className="flex flex-wrap gap-1.5 mt-3">
+                    {source.tags.map((tag) => (
+                      <Badge key={tag} variant="outline" className="text-xs px-2 py-0.5">
+                        {tag}
+                      </Badge>
+                    ))}
+                  </div>
+                )}
               </CardHeader>
-              <CardContent>
-                <div className="space-y-3">
+              <CardContent className="pt-0">
+                <div className="space-y-2">
                   <div className="flex items-center justify-between text-sm">
                     <span className="text-muted-foreground">Skills 数量</span>
                     <span className="font-medium">{source.skillCount}</span>
@@ -362,10 +364,11 @@ export default function MarketplaceList() {
                       </span>
                     </div>
                   )}
-                  <div className="flex items-center gap-2 pt-2">
+                  <div className="flex items-center gap-1.5 pt-3 border-t mt-3">
                     <Button
-                      variant="outline"
-                      size="sm"
+                      variant="ghost"
+                      size="icon"
+                      className="h-8 w-8"
                       onClick={(e) => {
                         e.stopPropagation();
                         handleRefreshSource(source);
@@ -373,42 +376,45 @@ export default function MarketplaceList() {
                       disabled={refreshingSources.has(source.id)}
                     >
                       {refreshingSources.has(source.id) ? (
-                        <Loader2 className="h-3 w-3 animate-spin" />
+                        <Loader2 className="h-4 w-4 animate-spin" />
                       ) : (
-                        <RefreshCw className="h-3 w-3" />
+                        <RefreshCw className="h-4 w-4" />
                       )}
                     </Button>
                     <Button
-                      variant="outline"
-                      size="sm"
+                      variant="ghost"
+                      size="icon"
+                      className="h-8 w-8"
                       onClick={(e) => {
                         e.stopPropagation();
                         setEditingSource(source);
                         setEditDialogOpen(true);
                       }}
                     >
-                      <Edit className="h-3 w-3" />
+                      <Edit className="h-4 w-4" />
                     </Button>
                     <Button
-                      variant="outline"
-                      size="sm"
+                      variant="ghost"
+                      size="icon"
+                      className="h-8 w-8"
                       onClick={(e) => {
                         e.stopPropagation();
                         window.open(source.url, '_blank');
                       }}
                     >
-                      <ExternalLink className="h-3 w-3" />
+                      <ExternalLink className="h-4 w-4" />
                     </Button>
                     <Button
-                      variant="outline"
-                      size="sm"
+                      variant="ghost"
+                      size="icon"
+                      className="h-8 w-8 text-destructive hover:text-destructive"
                       onClick={(e) => {
                         e.stopPropagation();
                         setDeletingSource(source);
                         setDeleteDialogOpen(true);
                       }}
                     >
-                      <Trash2 className="h-3 w-3" />
+                      <Trash2 className="h-4 w-4" />
                     </Button>
                     <div className="flex-1" />
                     <Switch
