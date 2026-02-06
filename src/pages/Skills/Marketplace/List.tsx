@@ -321,21 +321,21 @@ export default function MarketplaceList() {
           {sources.map((source) => (
             <Card
               key={source.id}
-              className="hover:shadow-lg transition-shadow cursor-pointer"
+              className="hover:shadow-lg transition-shadow cursor-pointer flex flex-col"
               onClick={() => navigate(`/skills/marketplace/${source.id}`)}
             >
-              <CardHeader>
+              <CardHeader className="flex-1">
                 <div className="flex items-start justify-between">
-                  <div className="flex-1">
-                    <CardTitle className="flex items-center gap-2">
-                      {source.name}
+                  <div className="flex-1 min-w-0">
+                    <CardTitle className="flex items-center gap-2 flex-wrap">
+                      <span className="break-all">{source.name}</span>
                       {!source.enabled && (
-                        <Badge variant="secondary" className="text-xs">
+                        <Badge variant="secondary" className="text-xs shrink-0">
                           已禁用
                         </Badge>
                       )}
                     </CardTitle>
-                    <CardDescription className="mt-2">
+                    <CardDescription className="mt-2 line-clamp-2">
                       {source.description || '暂无描述'}
                     </CardDescription>
                   </div>

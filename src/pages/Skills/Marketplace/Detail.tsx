@@ -289,30 +289,30 @@ export default function MarketplaceDetail() {
           {/* Skills 卡片列表 */}
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
             {filteredSkills.map((skill) => (
-              <Card key={skill.name} className="hover:shadow-lg transition-shadow">
-                <CardHeader>
+              <Card key={skill.name} className="hover:shadow-lg transition-shadow flex flex-col">
+                <CardHeader className="flex-1">
                   <div className="flex items-start gap-3">
                     <Checkbox
                       checked={selectedSkills.has(skill.name)}
                       onCheckedChange={() => toggleSkillSelection(skill.name)}
                       onClick={(e) => e.stopPropagation()}
                     />
-                    <div className="flex-1">
-                      <CardTitle className="flex items-center gap-2">
-                        {skill.name}
+                    <div className="flex-1 min-w-0">
+                      <CardTitle className="flex items-center gap-2 flex-wrap">
+                        <span className="truncate">{skill.name}</span>
                         {skill.installed && (
-                          <Badge variant="secondary" className="text-xs">
+                          <Badge variant="secondary" className="text-xs shrink-0">
                             <CheckCircle2 className="h-3 w-3 mr-1" />
                             已安装
                           </Badge>
                         )}
                         {skill.hasUpdate && (
-                          <Badge variant="default" className="text-xs">
+                          <Badge variant="default" className="text-xs shrink-0">
                             有更新
                           </Badge>
                         )}
                       </CardTitle>
-                      <CardDescription className="mt-2">
+                      <CardDescription className="mt-2 line-clamp-3">
                         {skill.description || '暂无描述'}
                       </CardDescription>
                     </div>
