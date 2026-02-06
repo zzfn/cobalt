@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
-import { ArrowLeft, Sparkles, Loader2, FileText, Trash2, Eye, Code, Package, Tag, Folder, File, ChevronRight, ChevronDown, FolderOpen, RefreshCw, Download, AlertCircle, Share2, X } from 'lucide-react';
+import { ArrowLeft, Sparkles, Loader2, FileText, Trash2, Eye, Code, Tag, Folder, File, ChevronRight, ChevronDown, FolderOpen, RefreshCw, Download, AlertCircle, Share2, X } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 import {
   Card,
