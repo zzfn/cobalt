@@ -61,7 +61,7 @@ export function TargetToolsDialog({
     onOpenChange(false);
   };
 
-  const allTools: AiToolType[] = ['claude-code', 'cursor', 'codex', 'opencode', 'antigravity'];
+  const allTools: AiToolType[] = ['claude-code', 'cursor', 'codex', 'opencode', 'antigravity', 'droid'];
 
   // 过滤掉已排除的工具
   const availableTools = allTools.filter(tool => !excludeTools.includes(tool));
