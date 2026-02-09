@@ -186,18 +186,21 @@ export async function scanRepoSkills(repoUrl: string): Promise<import('@/types/s
 export async function installSkillFromRepo(
   repoUrl: string,
   skillNames?: string[],
-  targetTools?: string[]
+  targetTools?: string[],
+  workspacePath?: string | null
 ): Promise<string> {
   console.log('📡 [Service] installSkillFromRepo 被调用');
   console.log('📦 [Service] 仓库 URL:', repoUrl);
   console.log('📝 [Service] 指定安装:', skillNames);
   console.log('🎯 [Service] 目标工具:', targetTools);
+  console.log('📁 [Service] 工作区路径:', workspacePath);
 
   try {
     const result = await invoke<string>('install_skill_from_repo', {
       repoUrl,
       skillNames,
-      targetTools: targetTools || null
+      targetTools: targetTools || null,
+      workspacePath: workspacePath ?? null
     });
     console.log('✅ [Service] 安装成功:', result);
     return result;

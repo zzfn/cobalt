@@ -136,7 +136,7 @@ fn get_skills_dir() -> Result<PathBuf, String> {
     Ok(get_claude_dir()?.join("skills"))
 }
 
-/// 获取所有 AI Tools 的 skills 目录映射
+/// 获取所有 AI Tools 的全局 skills 目录映射
 /// 返回 Vec<(tool_name, directory_path)>
 /// 目录定义参考 skill-manager 项目
 fn get_all_tool_skills_dirs() -> Vec<(&'static str, PathBuf)> {
@@ -157,14 +157,64 @@ fn get_all_tool_skills_dirs() -> Vec<(&'static str, PathBuf)> {
 
         // Cursor: ~/.cursor/skills/
         dirs.push(("cursor", home.join(".cursor").join("skills")));
+
+        // Droid: ~/.factory/skills/
+        dirs.push(("droid", home.join(".factory").join("skills")));
     }
 
     dirs
 }
 
-/// 根据工具名称列表获取对应的 skills 目录
+/// 获取所有 AI Tools 的项目级别 skills 目录映射
+/// workspace_path: 工作区路径
+/// 返回 Vec<(tool_name, directory_path)>
+fn get_all_tool_workspace_skills_dirs(workspace_path: &PathBuf) -> Vec<(&'static str, PathBuf)> {
+    let mut dirs = Vec::new();
+
+    // Claude Code: {workspace}/.claude/skills/
+    dirs.push(("claude-code", workspace_path.join(".claude").join("skills")));
+
+    // Antigravity: {workspace}/.gemini/antigravity/global_skills/
+    dirs.push(("antigravity", workspace_path.join(".gemini").join("antigravity").join("global_skills")));
+
+    // OpenCode: {workspace}/.config/opencode/skills/
+    dirs.push(("opencode", workspace_path.join(".config").join("opencode").join("skills")));
+
+    // Codex: {workspace}/.codex/skills/
+    dirs.push(("codex", workspace_path.join(".codex").join("skills")));
+
+    // Cursor: {workspace}/.cursor/skills/
+    dirs.push(("cursor", workspace_path.join(".cursor").join("skills")));
+
+    // Droid: {workspace}/.factory/skills/
+    dirs.push(("droid", workspace_path.join(".factory").join("skills")));
+
+    dirs
+}
+
+/// 根据工具名称列表获取对应的 skills 目录（全局）
 fn get_target_tool_dirs(tool_names: &Vec<String>) -> Result<Vec<(String, PathBuf)>, String> {
     let all_dirs = get_all_tool_skills_dirs();
+    let mut target_dirs = Vec::new();
+
+    for tool_name in tool_names {
+        if let Some((_, dir)) = all_dirs.iter().find(|(name, _)| *name == tool_name.as_str()) {
+            target_dirs.push((tool_name.clone(), dir.clone()));
+        } else {
+            return Err(format!("未知的 AI 工具: {}", tool_name));
+        }
+    }
+
+    if target_dirs.is_empty() {
+        return Err("未指定有效的目标工具".to_string());
+    }
+
+    Ok(target_dirs)
+}
+
+/// 根据工具名称列表获取对应的 skills 目录（工作区级别）
+fn get_target_tool_workspace_dirs(tool_names: &Vec<String>, workspace_path: &PathBuf) -> Result<Vec<(String, PathBuf)>, String> {
+    let all_dirs = get_all_tool_workspace_skills_dirs(workspace_path);
     let mut target_dirs = Vec::new();
 
     for tool_name in tool_names {
@@ -624,36 +674,37 @@ pub fn remove_skill_from_tools(
 }
 
 /// 获取所有已安装的 Skills（扫描多个 AI Tools 目录）
-/// workspace_path: 可选的工作区路径，如果提供则扫描工作区的 .claude/skills 目录
+/// workspace_path: 可选的工作区路径，如果提供则扫描工作区的各 AI Tool skills 目录
 #[tauri::command]
 pub fn list_installed_skills(workspace_path: Option<String>) -> Result<Vec<SkillRegistryEntry>, String> {
     // 根据是否提供工作区路径决定扫描目录
-    let (skills_dir, disabled_skills_dir) = if let Some(ref ws_path) = workspace_path {
+    let (skills_dir, disabled_skills_dir, tool_dirs) = if let Some(ref ws_path) = workspace_path {
         let ws_path_buf = PathBuf::from(ws_path);
+        // 工作区模式下，默认使用 .claude/skills 作为主目录（兼容原有逻辑）
         let ws_skills_dir = ws_path_buf.join(".claude").join("skills");
         let ws_disabled_dir = ws_path_buf.join(".claude").join(".disabled_skills");
+        // 获取所有 AI Tools 的工作区级别目录
+        let ws_tool_dirs = get_all_tool_workspace_skills_dirs(&ws_path_buf);
         println!("📁 [Backend] 扫描工作区 skills: {:?}", ws_skills_dir);
-        (ws_skills_dir, ws_disabled_dir)
+        (ws_skills_dir, ws_disabled_dir, ws_tool_dirs)
     } else {
         let global_skills_dir = get_skills_dir()?;
         let global_disabled_dir = get_claude_dir()?.join(".disabled_skills");
+        let global_tool_dirs = get_all_tool_skills_dirs();
         println!("🌐 [Backend] 扫描全局 skills: {:?}", global_skills_dir);
-        (global_skills_dir, global_disabled_dir)
+        (global_skills_dir, global_disabled_dir, global_tool_dirs)
     };
 
-    // 如果是全局模式，扫描所有 AI Tools 的目录，建立 skill -> tools 映射
+    // 扫描所有 AI Tools 的目录，建立 skill -> tools 映射
     let mut skill_to_tools: std::collections::HashMap<String, Vec<String>> = std::collections::HashMap::new();
 
-    if workspace_path.is_none() {
-        let tool_dirs = get_all_tool_skills_dirs();
-        for (tool_name, tool_dir) in &tool_dirs {
-            let tool_skills = scan_skills_in_dir(tool_dir);
-            for skill_name in tool_skills {
-                skill_to_tools
-                    .entry(skill_name)
-                    .or_insert_with(Vec::new)
-                    .push(tool_name.to_string());
-            }
+    for (tool_name, tool_dir) in &tool_dirs {
+        let tool_skills = scan_skills_in_dir(tool_dir);
+        for skill_name in tool_skills {
+            skill_to_tools
+                .entry(skill_name)
+                .or_insert_with(Vec::new)
+                .push(tool_name.to_string());
         }
     }
 
@@ -924,6 +975,7 @@ pub async fn install_skill_from_repo(
     repo_url: String,
     skill_names: Option<Vec<String>>,
     target_tools: Option<Vec<String>>,
+    workspace_path: Option<String>,
 ) -> Result<String, String> {
 
     println!("🔧 [Backend] 开始安装 Skill");
@@ -934,13 +986,26 @@ pub async fn install_skill_from_repo(
     if let Some(ref tools) = target_tools {
         println!("🎯 [Backend] 目标工具: {:?}", tools);
     }
+    if let Some(ref ws) = workspace_path {
+        println!("📁 [Backend] 工作区路径: {:?}", ws);
+    }
 
-    // 获取目标工具的目录列表
-    let target_dirs = if let Some(tools) = target_tools.as_ref() {
-        get_target_tool_dirs(tools)?
+    // 获取目标工具的目录列表（根据是否提供工作区路径决定）
+    let target_dirs = if let Some(ref ws_path) = workspace_path {
+        let ws_path_buf = PathBuf::from(ws_path);
+        if let Some(tools) = target_tools.as_ref() {
+            get_target_tool_workspace_dirs(tools, &ws_path_buf)?
+        } else {
+            // 默认安装到工作区的 claude-code
+            vec![("claude-code".to_string(), ws_path_buf.join(".claude").join("skills"))]
+        }
     } else {
-        // 默认只安装到 claude-code
-        vec![("claude-code".to_string(), get_skills_dir()?)]
+        if let Some(tools) = target_tools.as_ref() {
+            get_target_tool_dirs(tools)?
+        } else {
+            // 默认只安装到全局 claude-code
+            vec![("claude-code".to_string(), get_skills_dir()?)]
+        }
     };
 
     println!("📁 [Backend] 目标目录: {:?}", target_dirs);
