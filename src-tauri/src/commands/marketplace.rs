@@ -612,7 +612,7 @@ pub async fn install_skill_from_marketplace(
         .ok_or_else(|| format!("市场源 {} 不存在", source_id))?;
 
     // 调用现有的安装函数
-    let result = install_skill_from_repo(source.url.clone(), Some(skill_names.clone()), target_tools).await?;
+    let result = install_skill_from_repo(source.url.clone(), Some(skill_names.clone()), target_tools, None).await?;
 
     // 安装完成后，更新 metadata 中的 sourceId
     let mut registry = read_skill_registry().map_err(|e| format!("读取注册表失败: {}", e))?;
