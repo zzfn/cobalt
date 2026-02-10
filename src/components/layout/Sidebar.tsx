@@ -2,8 +2,7 @@ import { Link, useLocation } from 'react-router-dom';
 import { useAtom } from 'jotai';
 import { useEffect, useState } from 'react';
 import { getVersion } from '@tauri-apps/api/app';
-import { check } from '@tauri-apps/plugin-updater';
-import { toast } from 'sonner';
+import { useAppUpdate } from '@/hooks/useAppUpdate';
 import {
   LayoutDashboard,
   Settings,
@@ -35,58 +34,34 @@ interface NavItem {
   children?: NavItem[];
 }
 
-const navItems: NavItem[] = [
+interface NavGroup {
+  items: NavItem[];
+}
+
+const navGroups: NavGroup[] = [
   {
-    title: '仪表板',
-    href: '/dashboard',
-    icon: LayoutDashboard,
-  },
-  {
-    title: 'Skills',
-    href: '/skills',
-    icon: Sparkles,
-  },
-  {
-    title: 'Skill 市场',
-    href: '/skills/marketplace',
-    icon: Database,
-  },
-  {
-    title: 'Token 用量',
-    href: '/token-usage',
-    icon: BarChart3,
-  },
-  {
-    title: 'Claude Code',
-    href: '/settings/claude-code',
-    icon: Terminal,
-    children: [
-      {
-        title: 'API Key',
-        href: '/settings/claude-code',
-        icon: Key,
-      },
-      {
-        title: 'CLAUDE.md',
-        href: '/settings/instructions',
-        icon: FileText,
-      },
-      {
-        title: 'settings.json',
-        href: '/settings/settings-json',
-        icon: FileJson,
-      },
-      {
-        title: '缓存管理',
-        href: '/settings/cache',
-        icon: HardDrive,
-      },
+    items: [
+      { title: '仪表板', href: '/dashboard', icon: LayoutDashboard },
+      { title: 'Skills', href: '/skills', icon: Sparkles },
+      { title: 'Skill 市场', href: '/skills/marketplace', icon: Database },
+      { title: 'Token 用量', href: '/token-usage', icon: BarChart3 },
     ],
   },
   {
-    title: '通用设置',
-    href: '/settings/general',
-    icon: Settings,
+    items: [
+      {
+        title: 'Claude Code',
+        href: '/settings/claude-code',
+        icon: Terminal,
+        children: [
+          { title: 'API Key', href: '/settings/claude-code', icon: Key },
+          { title: 'CLAUDE.md', href: '/settings/instructions', icon: FileText },
+          { title: 'settings.json', href: '/settings/settings-json', icon: FileJson },
+          { title: '缓存管理', href: '/settings/cache', icon: HardDrive },
+        ],
+      },
+      { title: '通用设置', href: '/settings/general', icon: Settings },
+    ],
   },
 ];
 
@@ -97,7 +72,7 @@ export default function Sidebar() {
   const location = useLocation();
   const [version, setVersion] = useState<string>('');
   const [ccVersion, setCcVersion] = useState<string>('');
-  const [checkingUpdate, setCheckingUpdate] = useState(false);
+  const { checkingUpdate, checkForUpdate } = useAppUpdate();
 
   useEffect(() => {
     getVersion().then(setVersion).catch(console.error);
@@ -111,44 +86,6 @@ export default function Sidebar() {
       setTheme('system');
     } else {
       setTheme('light');
-    }
-  };
-
-  const handleCheckUpdate = async () => {
-    setCheckingUpdate(true);
-    try {
-      const update = await check();
-
-      if (update?.available) {
-        toast.info('发现新版本', {
-          description: `版本 ${update.version} 可用，请重启应用以更新`,
-          duration: 5000,
-        });
-      } else {
-        toast.success('已是最新版本', {
-          description: `当前版本 ${version}`,
-          duration: 3000,
-        });
-      }
-    } catch (error) {
-      console.error('检查更新失败:', error);
-
-      // 获取更详细的错误信息
-      let errorMessage = '未知错误';
-      if (error instanceof Error) {
-        errorMessage = error.message;
-      } else if (typeof error === 'string') {
-        errorMessage = error;
-      } else if (error && typeof error === 'object') {
-        errorMessage = JSON.stringify(error);
-      }
-
-      toast.error('检查更新失败', {
-        description: errorMessage,
-        duration: 5000,
-      });
-    } finally {
-      setCheckingUpdate(false);
     }
   };
 
@@ -225,9 +162,12 @@ export default function Sidebar() {
 
       {/* 导航 */}
       <nav className="flex-1 space-y-1 overflow-y-auto p-2">
-        {navItems.slice(0, 4).map((item) => renderNavItem(item))}
-        <Separator className="my-2" />
-        {navItems.slice(4).map((item) => renderNavItem(item))}
+        {navGroups.map((group, index) => (
+          <div key={index}>
+            {group.items.map((item) => renderNavItem(item))}
+            {index < navGroups.length - 1 && <Separator className="my-2" />}
+          </div>
+        ))}
       </nav>
 
       <Separator />
@@ -288,7 +228,7 @@ export default function Sidebar() {
               variant="ghost"
               size="icon"
               className="h-6 w-6"
-              onClick={handleCheckUpdate}
+              onClick={() => checkForUpdate(version)}
               disabled={checkingUpdate}
               title="检查更新"
             >
