@@ -26,11 +26,18 @@ pub fn read_stats_cache() -> Result<serde_json::Value, String> {
         .map_err(|e| format!("解析 stats-cache.json 失败: {}", e))
 }
 
+/// 获取用户默认 shell
+fn get_user_shell() -> String {
+    std::env::var("SHELL").unwrap_or_else(|_| "/bin/zsh".to_string())
+}
+
 /// 获取 Claude Code 版本号
+/// 通过 login shell 执行，确保加载用户完整的 PATH 配置
 #[tauri::command]
 pub fn get_claude_code_version() -> Result<String, String> {
-    let output = Command::new("claude")
-        .arg("--version")
+    let shell = get_user_shell();
+    let output = Command::new(&shell)
+        .args(["-l", "-c", "claude --version"])
         .output()
         .map_err(|e| format!("执行 claude --version 失败: {}", e))?;
 
