@@ -1,4 +1,5 @@
 import { useEffect, useState, useCallback } from 'react';
+import { toast } from 'sonner';
 import { useAtom, useAtomValue, useSetAtom } from 'jotai';
 import { Sparkles, Search, Filter, RefreshCw, Plus, Loader2, CheckCircle2, Globe, Folder } from 'lucide-react';
 import { Input } from '@/components/ui/input';
@@ -112,25 +113,18 @@ export default function SkillsList() {
   };
 
   const handleScanRepo = async () => {
-    console.log('🔍 handleScanRepo 被调用');
-    console.log('📦 仓库 URL:', repoUrl);
-
     if (!repoUrl.trim()) {
-      console.log('❌ URL 为空');
       setInstallError('请输入仓库 URL');
       return;
     }
 
-    console.log('⏳ 开始扫描...');
     setScanning(true);
     setInstallError(null);
     setScannedSkills([]);
     setSelectedSkills(new Set());
 
     try {
-      console.log('📡 调用 scanRepoSkills...');
       const skills = await scanRepoSkills(repoUrl);
-      console.log('✅ 扫描成功:', skills);
       setScannedSkills(skills);
 
       // 默认选中所有未安装的 skills
@@ -144,16 +138,11 @@ export default function SkillsList() {
       const message = typeof err === 'string' ? err : (err instanceof Error ? err.message : '扫描失败');
       setInstallError(message);
     } finally {
-      console.log('🏁 扫描流程结束');
       setScanning(false);
     }
   };
 
   const handleInstallSkill = async () => {
-    console.log('🔧 handleInstallSkill 被调用');
-    console.log('📦 选中的 skills:', Array.from(selectedSkills));
-    console.log('🎯 选中的工具:', Array.from(selectedTools));
-
     if (selectedSkills.size === 0) {
       setInstallError('请至少选择一个 Skill');
       return;
@@ -164,19 +153,16 @@ export default function SkillsList() {
       return;
     }
 
-    console.log('⏳ 开始安装...');
     setInstalling(true);
     setInstallError(null);
 
     try {
-      console.log('📡 调用 installSkillFromRepo...');
       const result = await installSkillFromRepo(
         repoUrl,
         Array.from(selectedSkills),
         Array.from(selectedTools)
       );
-      console.log('✅ 安装成功:', result);
-      alert(`安装成功！\n\n${result}`);
+      toast.success('安装成功', { description: result });
       setInstallDialogOpen(false);
       setRepoUrl('');
       setScannedSkills([]);
@@ -190,7 +176,6 @@ export default function SkillsList() {
       const message = typeof err === 'string' ? err : (err instanceof Error ? err.message : '安装失败');
       setInstallError(message);
     } finally {
-      console.log('🏁 安装流程结束');
       setInstalling(false);
     }
   };
@@ -223,10 +208,10 @@ export default function SkillsList() {
     try {
       await uninstallSkill(skillName);
       setSkills((prev) => prev.filter((s) => s.name !== skillName));
-      alert(`Skill "${skillName}" 已删除`);
+      toast.success(`Skill "${skillName}" 已删除`);
     } catch (err) {
       console.error('删除 Skill 失败:', err);
-      alert(`删除失败: ${err instanceof Error ? err.message : '未知错误'}`);
+      toast.error('删除失败', { description: err instanceof Error ? err.message : '未知错误' });
     }
   };
 
@@ -559,7 +544,7 @@ export default function SkillsList() {
                       }
                       className="cursor-pointer gap-1"
                       onClick={() =>
-                        setFilter({ ...filter, installedBy: option.value as any })
+                        setFilter({ ...filter, installedBy: option.value })
                       }
                     >
                       <span>{option.icon}</span>
@@ -579,7 +564,7 @@ export default function SkillsList() {
                       }
                       className="cursor-pointer gap-1"
                       onClick={() =>
-                        setFilter({ ...filter, targetTool: option.value as any })
+                        setFilter({ ...filter, targetTool: option.value })
                       }
                     >
                       <span>{option.icon}</span>

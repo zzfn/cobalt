@@ -12,12 +12,8 @@ export function useMarketplaceInit() {
   useEffect(() => {
     const initMarketplace = async () => {
       try {
-        console.log('🔄 初始化市场数据源...');
-
         // 调用 Rust 命令初始化内置数据源
         await invoke('init_default_sources');
-
-        console.log('✅ 数据源初始化成功');
         setIsInitialized(true);
       } catch (err) {
         console.error('❌ 数据源初始化失败:', err);

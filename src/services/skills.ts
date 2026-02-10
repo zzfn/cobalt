@@ -1,6 +1,6 @@
 // Skills 服务 - 封装 Tauri 后端调用
 import { invoke } from '@tauri-apps/api/core';
-import type { SkillRegistryEntry, SkillDetail, SkillUpdateCheckResult } from '@/types/skills';
+import type { SkillRegistryEntry, SkillDetail, SkillUpdateCheckResult, AiToolType } from '@/types/skills';
 
 /**
  * 解析格式化的 skill 字符串
@@ -73,14 +73,14 @@ function toSkillRegistryEntry(entry: BackendSkillEntry): SkillRegistryEntry {
     name: parsedName,
     description: parsedDesc,
     enabled: entry.enabled,
-    installedBy: entry.installedBy as any,
+    installedBy: entry.installedBy as AiToolType[],
     url: entry.metadata?.repository,
     metadata: {
       name: entry.metadata?.name || entry.name,
       version: entry.metadata?.version || '0.0.0',
       description: entry.metadata?.description || entry.description || '',
       tags: entry.metadata?.tags || [],
-      targetTools: entry.metadata?.targetTools as any,
+      targetTools: entry.metadata?.targetTools as AiToolType[],
       repository: entry.metadata?.repository,
     },
   };
@@ -96,7 +96,7 @@ function toSkillDetail(detail: BackendSkillDetail): SkillDetail {
     name: parsedName,
     description: parsedDesc,
     enabled: detail.enabled,
-    installedBy: detail.installedBy as any,
+    installedBy: detail.installedBy as AiToolType[],
     url: detail.metadata?.repository,
     content: detail.content,
     files: detail.files,
@@ -105,7 +105,7 @@ function toSkillDetail(detail: BackendSkillDetail): SkillDetail {
       version: detail.metadata?.version || '0.0.0',
       description: detail.metadata?.description || detail.description || '',
       tags: detail.metadata?.tags || [],
-      targetTools: detail.metadata?.targetTools as any,
+      targetTools: detail.metadata?.targetTools as AiToolType[],
       repository: detail.metadata?.repository,
     },
   };
@@ -167,17 +167,7 @@ export async function readSkillFile(skillName: string, filePath: string): Promis
  * 扫描远程仓库中的 Skills（不安装）
  */
 export async function scanRepoSkills(repoUrl: string): Promise<import('@/types/skills').ScannedSkillInfo[]> {
-  console.log('🔍 [Service] scanRepoSkills 被调用');
-  console.log('📦 [Service] 仓库 URL:', repoUrl);
-
-  try {
-    const result = await invoke<import('@/types/skills').ScannedSkillInfo[]>('scan_repo_skills', { repoUrl });
-    console.log('✅ [Service] 扫描成功:', result);
-    return result;
-  } catch (error) {
-    console.error('❌ [Service] 扫描失败:', error);
-    throw error;
-  }
+  return invoke<import('@/types/skills').ScannedSkillInfo[]>('scan_repo_skills', { repoUrl });
 }
 
 /**
@@ -189,25 +179,12 @@ export async function installSkillFromRepo(
   targetTools?: string[],
   workspacePath?: string | null
 ): Promise<string> {
-  console.log('📡 [Service] installSkillFromRepo 被调用');
-  console.log('📦 [Service] 仓库 URL:', repoUrl);
-  console.log('📝 [Service] 指定安装:', skillNames);
-  console.log('🎯 [Service] 目标工具:', targetTools);
-  console.log('📁 [Service] 工作区路径:', workspacePath);
-
-  try {
-    const result = await invoke<string>('install_skill_from_repo', {
-      repoUrl,
-      skillNames,
-      targetTools: targetTools || null,
-      workspacePath: workspacePath ?? null
-    });
-    console.log('✅ [Service] 安装成功:', result);
-    return result;
-  } catch (error) {
-    console.error('❌ [Service] 安装失败:', error);
-    throw error;
-  }
+  return invoke<string>('install_skill_from_repo', {
+    repoUrl,
+    skillNames,
+    targetTools: targetTools || null,
+    workspacePath: workspacePath ?? null
+  });
 }
 
 /**

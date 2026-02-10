@@ -402,11 +402,11 @@ export default function SkillDetail() {
 
     try {
       await uninstallSkill(skill.name);
-      alert(`Skill "${skill.name}" 已删除`);
+      toast.success(`Skill "${skill.name}" 已删除`);
       navigate('/skills');
     } catch (err) {
       console.error('删除 Skill 失败:', err);
-      alert(`删除失败: ${err instanceof Error ? err.message : '未知错误'}`);
+      toast.error('删除失败', { description: err instanceof Error ? err.message : '未知错误' });
     }
   };
 
@@ -482,7 +482,7 @@ export default function SkillDetail() {
       await handleCheckUpdate();
     } catch (err) {
       console.error('保存仓库地址失败:', err);
-      alert(`保存失败: ${err instanceof Error ? err.message : '未知错误'}`);
+      toast.error('保存失败', { description: err instanceof Error ? err.message : '未知错误' });
     } finally {
       setSavingRepo(false);
     }
@@ -494,7 +494,7 @@ export default function SkillDetail() {
     setUpdating(true);
     try {
       const result = await updateSkill(skill.name);
-      alert(result);
+      toast.success(result);
       // 重新加载 skill 详情
       const data = await getSkillDetail(skill.name);
       setSkill(data);
@@ -502,7 +502,7 @@ export default function SkillDetail() {
       setUpdateCheck(null);
     } catch (err) {
       console.error('更新失败:', err);
-      alert(`更新失败: ${err instanceof Error ? err.message : '未知错误'}`);
+      toast.error('更新失败', { description: err instanceof Error ? err.message : '未知错误' });
     } finally {
       setUpdating(false);
     }
