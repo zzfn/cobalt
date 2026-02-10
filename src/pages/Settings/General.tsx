@@ -1,8 +1,9 @@
 import { useAtom } from 'jotai';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Settings, Sun, Moon, Monitor, RefreshCw } from 'lucide-react';
 import { getVersion } from '@tauri-apps/api/app';
 import { check } from '@tauri-apps/plugin-updater';
+import { relaunch } from '@tauri-apps/plugin-process';
 import { toast } from 'sonner';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -16,11 +17,11 @@ export default function GeneralSettings() {
   const [theme, setTheme] = useAtom(themeAtom);
   const [checkingUpdate, setCheckingUpdate] = useState(false);
   const [currentVersion, setCurrentVersion] = useState<string>('');
-
+  const [updating, setUpdating] = useState(false);
   // 获取当前版本
-  useState(() => {
+  useEffect(() => {
     getVersion().then(setCurrentVersion).catch(console.error);
-  });
+  }, []);
 
   const handleCheckUpdate = async () => {
     setCheckingUpdate(true);
@@ -29,8 +30,12 @@ export default function GeneralSettings() {
 
       if (update?.available) {
         toast.info('发现新版本', {
-          description: `版本 ${update.version} 可用，请重启应用以更新`,
-          duration: 5000,
+          description: `版本 ${update.version} 可用`,
+          action: {
+            label: '立即更新',
+            onClick: () => handleDownloadUpdate(),
+          },
+          duration: 10000,
         });
       } else {
         toast.success('已是最新版本', {
@@ -57,6 +62,46 @@ export default function GeneralSettings() {
       });
     } finally {
       setCheckingUpdate(false);
+    }
+  };
+
+  const handleDownloadUpdate = async () => {
+    setUpdating(true);
+    try {
+      const update = await check();
+      if (!update?.available) {
+        toast.info('更新已不可用，请稍后重试');
+        setUpdating(false);
+        return;
+      }
+
+      toast.loading('正在下载更新...', { id: 'settings-update' });
+
+      await update.downloadAndInstall((event) => {
+        if (event.event === 'Finished') {
+          toast.success('更新安装完成，应用将在 2 秒后重启...', {
+            id: 'settings-update',
+            duration: 2000,
+          });
+        }
+      });
+
+      await new Promise(resolve => setTimeout(resolve, 2000));
+
+      try {
+        await relaunch();
+      } catch (relaunchError) {
+        console.error('自动重启失败:', relaunchError);
+        toast.error('请手动重启应用以完成更新', { duration: 5000 });
+        setUpdating(false);
+      }
+    } catch (error) {
+      console.error('更新失败:', error);
+      toast.error('更新失败', {
+        description: error instanceof Error ? error.message : '未知错误',
+        id: 'settings-update',
+      });
+      setUpdating(false);
     }
   };
 
@@ -190,11 +235,11 @@ export default function GeneralSettings() {
             <Button
               variant="outline"
               onClick={handleCheckUpdate}
-              disabled={checkingUpdate}
+              disabled={checkingUpdate || updating}
               className="flex items-center gap-2"
             >
               <RefreshCw className={`h-4 w-4 ${checkingUpdate ? 'animate-spin' : ''}`} />
-              {checkingUpdate ? '检查中...' : '检查更新'}
+              {updating ? '更新中...' : checkingUpdate ? '检查中...' : '检查更新'}
             </Button>
           </div>
         </CardContent>
