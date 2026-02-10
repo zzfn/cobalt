@@ -13,10 +13,11 @@ import {
   ChevronRight,
   Sun,
   Moon,
-  Terminal,
+  Key,
   FileJson,
   RefreshCw,
   Database,
+  Terminal,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
@@ -48,24 +49,31 @@ const navItems: NavItem[] = [
     icon: Database,
   },
   {
-    title: '通用设置',
-    href: '/settings/general',
-    icon: Settings,
-  },
-  {
-    title: '全局指令',
-    href: '/settings/instructions',
-    icon: FileText,
-  },
-  {
     title: 'Claude Code',
     href: '/settings/claude-code',
     icon: Terminal,
+    children: [
+      {
+        title: 'API Key',
+        href: '/settings/claude-code',
+        icon: Key,
+      },
+      {
+        title: 'CLAUDE.md',
+        href: '/settings/instructions',
+        icon: FileText,
+      },
+      {
+        title: 'settings.json',
+        href: '/settings/settings-json',
+        icon: FileJson,
+      },
+    ],
   },
   {
-    title: 'settings.json',
-    href: '/settings/settings-json',
-    icon: FileJson,
+    title: '通用设置',
+    href: '/settings/general',
+    icon: Settings,
   },
 ];
 
@@ -130,9 +138,18 @@ export default function Sidebar() {
   };
 
   const renderNavItem = (item: NavItem, depth = 0) => {
-    // 精确匹配逻辑：避免 /skills/marketplace 也高亮 /skills
+    const hasChildren = item.children && item.children.length > 0;
+
+    // 精确匹配逻辑
     const isActive = (() => {
       if (location.pathname === item.href) return true;
+
+      // 有子菜单时，任意子项匹配则父级高亮
+      if (hasChildren) {
+        return item.children!.some(
+          (child) => location.pathname === child.href || location.pathname.startsWith(child.href + '/')
+        );
+      }
 
       // 特殊处理 /skills 路由：只有访问 /skills/:skillName 时才高亮
       if (item.href === '/skills') {
@@ -144,8 +161,7 @@ export default function Sidebar() {
       return location.pathname.startsWith(item.href + '/');
     })();
 
-    const hasChildren = item.children && item.children.length > 0;
-    const isExpanded = hasChildren && location.pathname.startsWith(item.href);
+    const isExpanded = hasChildren;
 
     return (
       <div key={item.href}>
