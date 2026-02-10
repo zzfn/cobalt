@@ -1,38 +1,29 @@
-import { useEffect, useCallback } from 'react';
+import { useEffect, useCallback, useState } from 'react';
 import { useAtom } from 'jotai';
 import {
   LayoutDashboard,
-  Sparkles,
-  ToggleRight,
-  Key,
   RefreshCw,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { toast } from 'sonner';
-import StatCard from '@/components/dashboard/StatCard';
 import ActivityList from '@/components/dashboard/ActivityList';
-import QuickActions from '@/components/dashboard/QuickActions';
-import SystemStatus from '@/components/dashboard/SystemStatus';
-import SkillsOverview from '@/components/dashboard/MiniSkillCard';
+import RecentProjects from '@/components/dashboard/RecentProjects';
+import TokenUsageOverview from '@/components/dashboard/TokenUsageOverview';
+import WorkspaceInfo from '@/components/dashboard/WorkspaceInfo';
 import {
-  dashboardStatsAtom,
   recentActivitiesAtom,
-  configHealthAtom,
   dashboardLoadingAtom,
   dashboardErrorAtom,
 } from '@/store/dashboardAtoms';
-import { skillsListAtom } from '@/store/skillsAtoms';
-import { getDashboardStats, getConfigHealth, readConversationHistory } from '@/services/config';
+import { readConversationHistory } from '@/services/config';
 import { clearActivities } from '@/lib/activityLogger';
-import { listInstalledSkills, toggleSkill } from '@/services/skills';
+import { readStatsCache } from '@/services/tokenUsage';
 
 export default function Dashboard() {
-  const [stats, setStats] = useAtom(dashboardStatsAtom);
   const [activities, setActivities] = useAtom(recentActivitiesAtom);
-  const [health, setHealth] = useAtom(configHealthAtom);
   const [loading, setLoading] = useAtom(dashboardLoadingAtom);
   const [error, setError] = useAtom(dashboardErrorAtom);
-  const [skills, setSkills] = useAtom(skillsListAtom);
+  const [tokenStats, setTokenStats] = useState<any>(null);
 
   // 加载仪表盘数据
   const loadDashboardData = useCallback(async () => {
@@ -40,19 +31,13 @@ export default function Dashboard() {
     setError(null);
 
     try {
-      const [dashboardStats, configHealth, installedSkills] = await Promise.all([
-        getDashboardStats(),
-        getConfigHealth(),
-        listInstalledSkills(),
+      const [conversationHistory, statsCache] = await Promise.all([
+        readConversationHistory(20),
+        readStatsCache().catch(() => null),
       ]);
 
-      setStats(dashboardStats);
-      setHealth(configHealth);
-      setSkills(installedSkills);
-
-      // 从 Claude Code history.jsonl 加载对话记录
-      const conversationHistory = await readConversationHistory(20);
       setActivities(conversationHistory);
+      setTokenStats(statsCache);
     } catch (err) {
       const message = err instanceof Error ? err.message : '加载仪表盘数据失败';
       setError(message);
@@ -60,38 +45,12 @@ export default function Dashboard() {
     } finally {
       setLoading(false);
     }
-  }, [setStats, setHealth, setSkills, setActivities, setError, setLoading]);
+  }, [setActivities, setError, setLoading]);
 
   // 初始加载
   useEffect(() => {
     loadDashboardData();
   }, [loadDashboardData]);
-
-  // 切换 Skill 状态
-  const handleToggleSkill = async (skillName: string, enabled: boolean) => {
-    // 乐观更新
-    const previousSkills = [...skills];
-    setSkills((prev) =>
-      prev.map((s) => (s.name === skillName ? { ...s, enabled } : s))
-    );
-
-    try {
-      await toggleSkill(skillName, enabled);
-      toast.success(enabled ? 'Skill 已启用' : 'Skill 已禁用', {
-        description: skillName,
-      });
-
-      // 刷新统计数据
-      const newStats = await getDashboardStats();
-      setStats(newStats);
-    } catch (err) {
-      // 回滚
-      setSkills(previousSkills);
-      toast.error('操作失败', {
-        description: err instanceof Error ? err.message : '切换 Skill 状态失败',
-      });
-    }
-  };
 
   // 清除活动记录
   const handleClearActivities = () => {
@@ -101,86 +60,52 @@ export default function Dashboard() {
   };
 
   return (
-    <div className="space-y-6">
-      {/* 页面标题 */}
+    <div className="space-y-8">
+      {/* 页面标题 - Figma 极简风格 */}
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-3">
-          <LayoutDashboard className="h-8 w-8" />
+          <LayoutDashboard className="h-5 w-5 text-muted-foreground/50" strokeWidth={1.5} />
           <div>
-            <h1 className="text-2xl font-bold">仪表板</h1>
-            <p className="text-muted-foreground">
-              欢迎使用 Cobalt - Claude 配置管理工具
+            <h1 className="text-xl font-semibold tracking-tight">仪表板</h1>
+            <p className="text-sm text-muted-foreground/60">
+              Claude Code 配置与管理
             </p>
           </div>
         </div>
         <Button
-          variant="outline"
+          variant="ghost"
           size="sm"
           onClick={loadDashboardData}
           disabled={loading}
+          className="h-8 text-muted-foreground/60 hover:text-muted-foreground hover:bg-muted/50"
         >
-          <RefreshCw className={`h-4 w-4 mr-2 ${loading ? 'animate-spin' : ''}`} />
+          <RefreshCw className={`h-3.5 w-3.5 mr-2 ${loading ? 'animate-spin' : ''}`} strokeWidth={1.5} />
           刷新
         </Button>
       </div>
 
-      {/* 错误提示 */}
+      {/* 错误提示 - 极简风格 */}
       {error && (
-        <div className="rounded-lg bg-destructive/10 p-4 text-destructive">
-          <p className="font-medium">加载失败</p>
-          <p className="text-sm">{error}</p>
+        <div className="border-l-2 border-destructive pl-3 py-2">
+          <p className="text-sm text-destructive">{error}</p>
         </div>
       )}
 
-      {/* 统计卡片 */}
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        <StatCard
-          title="Skills 总数"
-          value={stats?.skills.total ?? 0}
-          description={`${stats?.skills.enabled ?? 0} 个已启用`}
-          icon={Sparkles}
-          href="/skills"
-          loading={loading}
-        />
-        <StatCard
-          title="已启用"
-          value={stats?.skills.enabled ?? 0}
-          description={`${stats?.skills.disabled ?? 0} 个已禁用`}
-          icon={ToggleRight}
-          href="/skills"
-          loading={loading}
-        />
-        <StatCard
-          title="配置档案"
-          value={stats?.profiles.total ?? 0}
-          description={stats?.profiles.activeId ? '1 个激活' : '未激活'}
-          icon={Key}
-          href="/settings/general"
-          loading={loading}
-        />
+      {/* 第一行：Token 用量 + 工作区 */}
+      <div className="grid gap-4 sm:grid-cols-2">
+        <TokenUsageOverview stats={tokenStats} loading={loading} />
+        <WorkspaceInfo />
       </div>
 
-      {/* 主内容区域 */}
-      <div className="grid gap-6 lg:grid-cols-3">
-        {/* 左侧：最近活动 */}
-        <div className="lg:col-span-2 space-y-6">
-          <ActivityList
-            activities={activities}
-            onClear={handleClearActivities}
-            loading={loading}
-          />
-          <SkillsOverview
-            skills={skills}
-            onToggleSkill={handleToggleSkill}
-            loading={loading}
-          />
-        </div>
-
-        {/* 右侧：快捷操作和系统状态 */}
-        <div className="space-y-6">
-          <QuickActions />
-          <SystemStatus health={health} loading={loading} />
-        </div>
+      {/* 第二行：最近项目 + 最近对话 */}
+      <div className="grid gap-6 lg:grid-cols-2">
+        <RecentProjects activities={activities} loading={loading} />
+        <ActivityList
+          activities={activities}
+          onClear={handleClearActivities}
+          loading={loading}
+          maxHeight="320px"
+        />
       </div>
     </div>
   );

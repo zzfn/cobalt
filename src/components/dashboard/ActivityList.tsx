@@ -19,13 +19,13 @@ export default function ActivityList({
   loading = false,
 }: ActivityListProps) {
   return (
-    <Card>
-      <CardHeader className="flex flex-row items-center justify-between pb-2">
+    <Card className="border border-border-strong">
+      <CardHeader className="flex flex-row items-center justify-between pb-3">
         <div className="flex items-center gap-2">
-          <History className="h-5 w-5 text-muted-foreground" />
+          <History className="h-4 w-4 text-muted-foreground/50" strokeWidth={1.5} />
           <div>
-            <CardTitle className="text-base">最近对话</CardTitle>
-            <CardDescription>Claude Code 最近的使用记录</CardDescription>
+            <CardTitle className="text-sm font-medium">最近对话</CardTitle>
+            <CardDescription className="text-xs">Claude Code 使用记录</CardDescription>
           </div>
         </div>
         {activities.length > 0 && onClear && (
@@ -33,37 +33,36 @@ export default function ActivityList({
             variant="ghost"
             size="sm"
             onClick={onClear}
-            className="h-8 w-8 p-0"
+            className="h-7 w-7 p-0 text-muted-foreground/50 hover:text-muted-foreground"
           >
-            <Trash2 className="h-4 w-4" />
+            <Trash2 className="h-3.5 w-3.5" strokeWidth={1.5} />
           </Button>
         )}
       </CardHeader>
-      <CardContent>
+      <CardContent className="pt-0">
         {loading ? (
           <div className="space-y-3">
             {Array.from({ length: 4 }).map((_, i) => (
               <div key={i} className="flex items-start gap-3">
-                <div className="h-8 w-8 animate-pulse rounded-full bg-muted" />
+                <div className="h-3.5 w-3.5 animate-pulse rounded-full bg-muted/50 mt-0.5" />
                 <div className="flex-1 space-y-2">
-                  <div className="h-4 w-3/4 animate-pulse rounded bg-muted" />
-                  <div className="h-3 w-1/4 animate-pulse rounded bg-muted" />
+                  <div className="h-3.5 w-1/2 animate-pulse rounded bg-muted/50" />
+                  <div className="h-3 w-16 animate-pulse rounded bg-muted/30" />
                 </div>
               </div>
             ))}
           </div>
         ) : activities.length === 0 ? (
-          <div className="flex flex-col items-center justify-center py-8 text-center text-muted-foreground">
-            <History className="h-8 w-8 mb-2 opacity-50" />
-            <p className="text-sm">暂无活动记录</p>
-            <p className="text-xs mt-1">执行操作后将显示在这里</p>
+          <div className="flex flex-col items-center justify-center py-10 text-center text-muted-foreground/50">
+            <History className="h-6 w-6 mb-2" strokeWidth={1.5} />
+            <p className="text-xs">暂无活动记录</p>
           </div>
         ) : (
           <ScrollArea
-            className="pr-2 [&_[data-radix-scroll-area-scrollbar]]:w-2 [&_[data-radix-scroll-area-thumb]]:bg-border/80 hover:[&_[data-radix-scroll-area-thumb]]:bg-border"
+            className="pr-2 [&_[data-radix-scroll-area-scrollbar]]:w-1.5 [&_[data-radix-scroll-area-thumb]]:bg-border/60 hover:[&_[data-radix-scroll-area-thumb]]:bg-border/80"
             style={{ height: maxHeight }}
           >
-            <div className="divide-y">
+            <div className="divide-y divide-border/50">
               {activities.map((activity) => (
                 <ActivityItem key={activity.id} activity={activity} />
               ))}

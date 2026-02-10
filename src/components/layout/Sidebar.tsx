@@ -120,18 +120,23 @@ export default function Sidebar() {
         <Link
           to={hasChildren ? item.children![0].href : item.href}
           className={cn(
-            'flex items-center gap-3 rounded-lg px-3 py-2 text-sm transition-colors',
-            'hover:bg-accent hover:text-accent-foreground',
-            isActive && 'bg-accent text-accent-foreground',
+            // Figma 风格：简洁布局，充足内边距
+            'flex items-center gap-3 px-3 py-2 text-sm transition-colors rounded-sm',
+            // 默认状态：透明背景
+            'bg-sidebar-item text-foreground',
+            // 悬停状态：极浅灰
+            'hover:bg-sidebar-item-hover',
+            // 选中状态：克制的背景色
+            isActive && 'bg-sidebar-item-active',
             collapsed && 'justify-center px-2',
             depth > 0 && !collapsed && 'ml-4'
           )}
         >
           <item.icon className={cn('h-4 w-4 shrink-0', collapsed && 'h-5 w-5')} />
-          {!collapsed && <span>{item.title}</span>}
+          {!collapsed && <span className="font-medium">{item.title}</span>}
         </Link>
         {hasChildren && isExpanded && !collapsed && (
-          <div className="mt-1 space-y-1">
+          <div className="mt-0.5 space-y-0.5">
             {item.children!.map((child) => renderNavItem(child, depth + 1))}
           </div>
         )}
@@ -142,44 +147,58 @@ export default function Sidebar() {
   return (
     <aside
       className={cn(
-        'flex h-screen flex-col border-r bg-card transition-all duration-300',
-        collapsed ? 'w-16' : 'w-64'
+        // Figma 风格：纯白/深色背景，细线右边框
+        'flex h-screen flex-col bg-sidebar border-r border-sidebar-border',
+        'transition-all duration-200 ease-in-out',
+        collapsed ? 'w-16' : 'w-60'
       )}
     >
-      {/* Logo */}
-      <div className={cn('flex h-14 items-center border-b px-4', collapsed && 'justify-center px-2')}>
+      {/* Logo 区域 - 极简设计 */}
+      <div className={cn(
+        'flex h-12 items-center border-b border-sidebar-border px-4',
+        collapsed && 'justify-center px-2'
+      )}>
         {!collapsed ? (
-          <span className="text-lg font-semibold">Cobalt</span>
+          <span className="text-sm font-semibold tracking-tight">Cobalt</span>
         ) : (
-          <span className="text-lg font-bold">C</span>
+          <span className="text-sm font-bold tracking-tight">C</span>
         )}
       </div>
 
       {/* 工作区选择器 */}
-      <div className={cn('border-b p-2', collapsed && 'flex justify-center')}>
+      <div className={cn(
+        'border-b border-sidebar-border px-2 py-2',
+        collapsed && 'flex justify-center py-2'
+      )}>
         <WorkspaceSelector collapsed={collapsed} />
       </div>
 
-      {/* 导航 */}
-      <nav className="flex-1 space-y-1 overflow-y-auto p-2">
+      {/* 导航区域 */}
+      <nav className="flex-1 overflow-y-auto px-2 py-3 space-y-0.5">
         {navGroups.map((group, index) => (
           <div key={index}>
             {group.items.map((item) => renderNavItem(item))}
-            {index < navGroups.length - 1 && <Separator className="my-2" />}
+            {index < navGroups.length - 1 && (
+              <Separator className="my-3 bg-sidebar-border/50" />
+            )}
           </div>
         ))}
       </nav>
 
-      <Separator />
-
-      {/* 底部操作 */}
-      <div className={cn('p-2 space-y-1', collapsed && 'flex flex-col items-center')}>
-        {/* 主题切换 */}
+      {/* 底部操作区域 */}
+      <div className={cn(
+        'border-t border-sidebar-border p-2 space-y-0.5',
+        collapsed && 'flex flex-col items-center'
+      )}>
+        {/* 主题切换 - 极简按钮样式 */}
         <Button
           variant="ghost"
           size={collapsed ? 'icon' : 'sm'}
           onClick={toggleTheme}
-          className={cn('w-full', collapsed && 'w-10')}
+          className={cn(
+            'h-9 rounded-sm hover:bg-sidebar-item-hover',
+            collapsed && 'w-10 h-10'
+          )}
         >
           {resolvedTheme === 'dark' ? (
             <Moon className="h-4 w-4" />
@@ -187,7 +206,7 @@ export default function Sidebar() {
             <Sun className="h-4 w-4" />
           )}
           {!collapsed && (
-            <span className="ml-2">
+            <span className="ml-2 text-sm">
               {theme === 'system' ? '跟随系统' : theme === 'dark' ? '深色' : '浅色'}
             </span>
           )}
@@ -198,14 +217,17 @@ export default function Sidebar() {
           variant="ghost"
           size={collapsed ? 'icon' : 'sm'}
           onClick={() => setCollapsed(!collapsed)}
-          className={cn('w-full', collapsed && 'w-10')}
+          className={cn(
+            'h-9 rounded-sm hover:bg-sidebar-item-hover',
+            collapsed && 'w-10 h-10'
+          )}
         >
           {collapsed ? (
             <ChevronRight className="h-4 w-4" />
           ) : (
             <>
               <ChevronLeft className="h-4 w-4" />
-              <span className="ml-2">收起侧边栏</span>
+              <span className="ml-2 text-sm">收起</span>
             </>
           )}
         </Button>
@@ -213,11 +235,11 @@ export default function Sidebar() {
         {/* 版本号和检查更新 */}
         {version && (
           <div className={cn(
-            'flex items-center gap-2 text-xs text-muted-foreground py-2',
-            collapsed ? 'flex-col px-0' : 'justify-between px-3'
+            'flex items-center gap-2 text-xs text-muted-foreground pt-1.5 pb-0.5',
+            collapsed ? 'flex-col px-0 gap-1' : 'justify-between px-3'
           )}>
             <div className="flex flex-col gap-0.5">
-              <span>{collapsed ? `v${version.split('.')[0]}` : `v${version}`}</span>
+              <span className="font-medium">{collapsed ? `v${version.split('.')[0]}` : `v${version}`}</span>
               {!collapsed && (
                 <span className="text-muted-foreground/70">
                   {ccVersion ? `CC ${ccVersion}` : 'CC --'}
@@ -227,7 +249,7 @@ export default function Sidebar() {
             <Button
               variant="ghost"
               size="icon"
-              className="h-6 w-6"
+              className="h-6 w-6 rounded-sm hover:bg-sidebar-item-hover"
               onClick={() => checkForUpdate(version)}
               disabled={checkingUpdate}
               title="检查更新"

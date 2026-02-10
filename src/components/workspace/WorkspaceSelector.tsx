@@ -116,14 +116,14 @@ export default function WorkspaceSelector({ collapsed = false }: WorkspaceSelect
       <Button
         variant="ghost"
         size="icon"
-        className="w-10 h-10"
+        className="h-9 w-9 rounded-sm hover:bg-sidebar-item-hover"
         onClick={() => setIsOpen(!isOpen)}
         title={currentWorkspace ? currentWorkspace.name : '全局工作区'}
       >
         {currentWorkspace ? (
-          <Folder className="h-5 w-5" />
+          <Folder className="h-4 w-4" />
         ) : (
-          <Globe className="h-5 w-5" />
+          <Globe className="h-4 w-4" />
         )}
       </Button>
     );
@@ -131,10 +131,10 @@ export default function WorkspaceSelector({ collapsed = false }: WorkspaceSelect
 
   return (
     <div className="relative">
-      {/* 当前工作区按钮 */}
+      {/* 当前工作区按钮 - Figma 风格 */}
       <Button
         variant="ghost"
-        className="w-full justify-between px-3 py-2 h-auto"
+        className="w-full justify-between px-3 h-9 rounded-sm hover:bg-sidebar-item-hover"
         onClick={() => setIsOpen(!isOpen)}
         disabled={loading}
       >
@@ -142,17 +142,17 @@ export default function WorkspaceSelector({ collapsed = false }: WorkspaceSelect
           {currentWorkspace ? (
             <>
               <Folder className="h-4 w-4 shrink-0 text-blue-500" />
-              <span className="truncate text-sm">{currentWorkspace.name}</span>
+              <span className="truncate text-sm font-medium">{currentWorkspace.name}</span>
             </>
           ) : (
             <>
               <Globe className="h-4 w-4 shrink-0 text-green-500" />
-              <span className="text-sm">全局工作区</span>
+              <span className="text-sm font-medium">全局工作区</span>
             </>
           )}
         </div>
         <ChevronDown className={cn(
-          'h-4 w-4 shrink-0 transition-transform',
+          'h-3.5 w-3.5 shrink-0 transition-transform',
           isOpen && 'rotate-180'
         )} />
       </Button>
@@ -166,8 +166,8 @@ export default function WorkspaceSelector({ collapsed = false }: WorkspaceSelect
             onClick={() => setIsOpen(false)}
           />
 
-          {/* 菜单内容 */}
-          <div className="absolute left-0 right-0 top-full mt-1 z-50 rounded-md border bg-popover p-1 shadow-md">
+          {/* 菜单内容 - Figma 极简风格 */}
+          <div className="absolute left-0 right-0 top-full mt-1 z-50 rounded-sm border border-border bg-card p-1 shadow-sm">
             {/* 全局工作区选项 */}
             <WorkspaceItem
               isGlobal
@@ -177,7 +177,7 @@ export default function WorkspaceSelector({ collapsed = false }: WorkspaceSelect
 
             {/* 工作区列表 */}
             {workspaces.length > 0 && (
-              <div className="my-1 border-t" />
+              <div className="my-1 border-t border-border/50" />
             )}
 
             {workspaces.map((workspace) => (
@@ -191,11 +191,11 @@ export default function WorkspaceSelector({ collapsed = false }: WorkspaceSelect
             ))}
 
             {/* 添加工作区按钮 */}
-            <div className="my-1 border-t" />
+            <div className="my-1 border-t border-border/50" />
             <Button
               variant="ghost"
               size="sm"
-              className="w-full justify-start gap-2"
+              className="w-full justify-start gap-2 h-8 rounded-sm hover:bg-sidebar-item-hover"
               onClick={handleOpenWorkspace}
             >
               <Plus className="h-4 w-4" />
@@ -226,9 +226,9 @@ function WorkspaceItem({
   return (
     <div
       className={cn(
-        'flex items-center justify-between rounded-sm px-2 py-1.5 text-sm cursor-pointer',
-        'hover:bg-accent hover:text-accent-foreground',
-        isActive && 'bg-accent text-accent-foreground'
+        'flex items-center justify-between rounded-sm px-2 py-1.5 text-sm cursor-pointer transition-colors',
+        'hover:bg-sidebar-item-hover',
+        isActive && 'bg-sidebar-item-active'
       )}
       onClick={onClick}
     >
@@ -236,13 +236,13 @@ function WorkspaceItem({
         {isGlobal ? (
           <>
             <Globe className="h-4 w-4 shrink-0 text-green-500" />
-            <span>全局工作区</span>
+            <span className="font-medium">全局工作区</span>
           </>
         ) : (
           <>
             <FolderOpen className="h-4 w-4 shrink-0 text-blue-500" />
             <div className="min-w-0 flex-1">
-              <div className="truncate">{workspace?.name}</div>
+              <div className="truncate font-medium">{workspace?.name}</div>
               {workspace?.skillCount !== undefined && workspace.skillCount > 0 && (
                 <div className="text-xs text-muted-foreground">
                   {workspace.skillCount} skills
@@ -258,7 +258,7 @@ function WorkspaceItem({
         <Button
           variant="ghost"
           size="icon"
-          className="h-6 w-6 shrink-0 opacity-0 group-hover:opacity-100 hover:bg-destructive/10 hover:text-destructive"
+          className="h-6 w-6 shrink-0 opacity-0 group-hover:opacity-100 hover:bg-destructive/10 hover:text-destructive rounded-sm"
           onClick={onRemove}
         >
           <X className="h-3 w-3" />
