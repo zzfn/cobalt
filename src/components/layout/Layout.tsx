@@ -1,19 +1,30 @@
-import { useEffect } from 'react';
+import { Suspense, useEffect } from 'react';
 import { Outlet } from 'react-router-dom';
-import { useAtomValue } from 'jotai';
+import { useAtomValue, useSetAtom } from 'jotai';
+import { Loader2 } from 'lucide-react';
 import { Toaster } from '@/components/ui/sonner';
 import Sidebar from './Sidebar';
 import UpdateChecker from '@/components/UpdateChecker';
-import { resolvedThemeAtom } from '@/store/uiAtoms';
+import ErrorBoundary from '@/components/ErrorBoundary';
+import { resolvedThemeAtom, systemPrefersDarkAtom } from '@/store/uiAtoms';
 import { invoke } from '@tauri-apps/api/core';
 import { getCurrentWindow } from '@tauri-apps/api/window';
 import { useMarketplaceInit } from '@/hooks/useMarketplaceInit';
 
 export default function Layout() {
   const resolvedTheme = useAtomValue(resolvedThemeAtom);
+  const setSystemPrefersDark = useSetAtom(systemPrefersDarkAtom);
 
   // 初始化市场数据源
   useMarketplaceInit();
+
+  // 监听系统主题变化
+  useEffect(() => {
+    const mql = window.matchMedia('(prefers-color-scheme: dark)');
+    const handler = (e: MediaQueryListEvent) => setSystemPrefersDark(e.matches);
+    mql.addEventListener('change', handler);
+    return () => mql.removeEventListener('change', handler);
+  }, [setSystemPrefersDark]);
 
   // 应用主题到 document 和窗口
   useEffect(() => {
@@ -45,7 +56,15 @@ export default function Layout() {
       <Sidebar />
       <main className="flex-1 overflow-y-auto bg-background">
         <div className="container mx-auto p-6">
-          <Outlet />
+          <ErrorBoundary>
+            <Suspense fallback={
+              <div className="flex items-center justify-center min-h-[400px]">
+                <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+              </div>
+            }>
+              <Outlet />
+            </Suspense>
+          </ErrorBoundary>
         </div>
       </main>
       <Toaster />

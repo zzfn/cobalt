@@ -1,18 +1,19 @@
 import { createBrowserRouter, Navigate } from 'react-router-dom';
+import React from 'react';
 import Layout from '@/components/layout/Layout';
 import Dashboard from '@/pages/Dashboard';
-import GeneralSettings from '@/pages/Settings/General';
-import InstructionsSettings from '@/pages/Settings/Instructions';
-import ClaudeCodeSettings from '@/pages/Settings/ClaudeCode';
-import SettingsJsonEditor from '@/pages/Settings/SettingsJson';
-import CacheSettings from '@/pages/Settings/Cache';
-import SkillsList from '@/pages/Skills/List';
-import SkillDetail from '@/pages/Skills/Detail';
-import MarketplaceList from '@/pages/Skills/Marketplace/List';
-import MarketplaceDetail from '@/pages/Skills/Marketplace/Detail';
-import TokenUsage from '@/pages/TokenUsage';
-import { GlassCardExample } from '@/components/examples/GlassCardExample';
-import GlassTest from '@/pages/GlassTest';
+
+// 懒加载非首屏页面
+const GeneralSettings = React.lazy(() => import('@/pages/Settings/General'));
+const InstructionsSettings = React.lazy(() => import('@/pages/Settings/Instructions'));
+const ClaudeCodeSettings = React.lazy(() => import('@/pages/Settings/ClaudeCode'));
+const SettingsJsonEditor = React.lazy(() => import('@/pages/Settings/SettingsJson'));
+const CacheSettings = React.lazy(() => import('@/pages/Settings/Cache'));
+const SkillsList = React.lazy(() => import('@/pages/Skills/List'));
+const SkillDetail = React.lazy(() => import('@/pages/Skills/Detail'));
+const MarketplaceList = React.lazy(() => import('@/pages/Skills/Marketplace/List'));
+const MarketplaceDetail = React.lazy(() => import('@/pages/Skills/Marketplace/Detail'));
+const TokenUsage = React.lazy(() => import('@/pages/TokenUsage'));
 
 export const router = createBrowserRouter([
   {
@@ -86,14 +87,6 @@ export const router = createBrowserRouter([
           },
         ],
       },
-      {
-        path: 'glass-test',
-        element: <GlassTest />,
-      },
     ],
-  },
-  {
-    path: '/glass-demo',
-    element: <GlassCardExample />,
   },
 ]);
