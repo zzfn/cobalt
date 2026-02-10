@@ -20,6 +20,8 @@ use commands::{
     // 工作区命令
     list_workspaces, add_workspace, remove_workspace, switch_workspace,
     get_current_workspace, update_workspace, refresh_workspace, init_workspace_skills_dir,
+    // 统计命令
+    read_stats_cache, get_claude_code_version,
 };
 
 #[cfg(target_os = "macos")]
@@ -131,6 +133,9 @@ pub fn run() {
             update_workspace,
             refresh_workspace,
             init_workspace_skills_dir,
+            // 统计命令
+            read_stats_cache,
+            get_claude_code_version,
             // 窗口主题
             set_window_theme,
         ])

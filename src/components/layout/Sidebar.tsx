@@ -18,12 +18,14 @@ import {
   RefreshCw,
   Database,
   Terminal,
+  BarChart3,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import { Separator } from '@/components/ui/separator';
 import { sidebarCollapsedAtom, themeAtom, resolvedThemeAtom } from '@/store/uiAtoms';
 import WorkspaceSelector from '@/components/workspace/WorkspaceSelector';
+import { getClaudeCodeVersion } from '@/services/tokenUsage';
 
 interface NavItem {
   title: string;
@@ -47,6 +49,11 @@ const navItems: NavItem[] = [
     title: 'Skill 市场',
     href: '/skills/marketplace',
     icon: Database,
+  },
+  {
+    title: 'Token 用量',
+    href: '/token-usage',
+    icon: BarChart3,
   },
   {
     title: 'Claude Code',
@@ -83,10 +90,12 @@ export default function Sidebar() {
   const [resolvedTheme] = useAtom(resolvedThemeAtom);
   const location = useLocation();
   const [version, setVersion] = useState<string>('');
+  const [ccVersion, setCcVersion] = useState<string>('');
   const [checkingUpdate, setCheckingUpdate] = useState(false);
 
   useEffect(() => {
     getVersion().then(setVersion).catch(console.error);
+    getClaudeCodeVersion().then(setCcVersion).catch(() => setCcVersion(''));
   }, []);
 
   const toggleTheme = () => {
@@ -210,9 +219,9 @@ export default function Sidebar() {
 
       {/* 导航 */}
       <nav className="flex-1 space-y-1 overflow-y-auto p-2">
-        {navItems.slice(0, 3).map((item) => renderNavItem(item))}
+        {navItems.slice(0, 4).map((item) => renderNavItem(item))}
         <Separator className="my-2" />
-        {navItems.slice(3).map((item) => renderNavItem(item))}
+        {navItems.slice(4).map((item) => renderNavItem(item))}
       </nav>
 
       <Separator />
@@ -261,7 +270,14 @@ export default function Sidebar() {
             'flex items-center gap-2 text-xs text-muted-foreground py-2',
             collapsed ? 'flex-col px-0' : 'justify-between px-3'
           )}>
-            <span>{collapsed ? `v${version.split('.')[0]}` : `v${version}`}</span>
+            <div className="flex flex-col gap-0.5">
+              <span>{collapsed ? `v${version.split('.')[0]}` : `v${version}`}</span>
+              {!collapsed && (
+                <span className="text-muted-foreground/70">
+                  {ccVersion ? `CC ${ccVersion}` : 'CC --'}
+                </span>
+              )}
+            </div>
             <Button
               variant="ghost"
               size="icon"

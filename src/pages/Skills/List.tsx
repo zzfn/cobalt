@@ -13,9 +13,7 @@ import {
 } from '@/components/ui/dialog';
 import { Badge } from '@/components/ui/badge';
 import { Label } from '@/components/ui/label';
-import { Switch } from '@/components/ui/switch';
 import { Checkbox } from '@/components/ui/checkbox';
-import { Card, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { cn } from '@/lib/utils';
 import SkillCard from '@/components/common/SkillCard';
 import {
@@ -35,8 +33,6 @@ import {
   scanRepoSkills,
   installSkillFromRepo,
   uninstallSkill,
-  createSkill,
-  type CreateSkillParams,
 } from '@/services/skills';
 import type { ScannedSkillInfo } from '@/types/skills';
 
@@ -58,17 +54,6 @@ export default function SkillsList() {
   const [scannedSkills, setScannedSkills] = useState<ScannedSkillInfo[]>([]);
   const [selectedSkills, setSelectedSkills] = useState<Set<string>>(new Set());
   const [selectedTools, setSelectedTools] = useState<Set<string>>(new Set(['claude-code']));
-
-  // 创建对话框状态
-  const [createDialogOpen, setCreateDialogOpen] = useState(false);
-  const [createForm, setCreateForm] = useState<CreateSkillParams>({
-    name: '',
-    description: '',
-    template: 'basic',
-    userInvocable: true,
-  });
-  const [creating, setCreating] = useState(false);
-  const [createError, setCreateError] = useState<string | null>(null);
 
   // 加载 Skills 数据
   const loadSkills = useCallback(async () => {
@@ -245,34 +230,6 @@ export default function SkillsList() {
     }
   };
 
-  const handleCreateSkill = async () => {
-    if (!createForm.name.trim()) {
-      setCreateError('请输入 Skill 名称');
-      return;
-    }
-
-    // 验证名称格式
-    if (!/^[a-zA-Z0-9_-]+$/.test(createForm.name)) {
-      setCreateError('名称只能包含字母、数字、连字符和下划线');
-      return;
-    }
-
-    setCreating(true);
-    setCreateError(null);
-
-    try {
-      const result = await createSkill(createForm);
-      alert(`创建成功！\n\n${result}`);
-      setCreateDialogOpen(false);
-      setCreateForm({ name: '', description: '', template: 'basic', userInvocable: true });
-      await loadSkills();
-    } catch (err) {
-      const message = err instanceof Error ? err.message : '创建失败';
-      setCreateError(message);
-    } finally {
-      setCreating(false);
-    }
-  };
 
   const installedByFilters = [
     { value: 'all', label: '全部', icon: '🤖' },
@@ -323,106 +280,6 @@ export default function SkillsList() {
           </div>
         </div>
         <div className="flex gap-2">
-          <Dialog open={createDialogOpen} onOpenChange={setCreateDialogOpen}>
-            <DialogTrigger asChild>
-              <Button variant="outline" size="sm">
-                <Plus className="mr-2 h-4 w-4" />
-                新建 Skill
-              </Button>
-            </DialogTrigger>
-            <DialogContent className="max-w-2xl">
-              <DialogHeader>
-                <DialogTitle>创建新 Skill</DialogTitle>
-                <DialogDescription>从头创建一个新的 Skill</DialogDescription>
-              </DialogHeader>
-              <div className="space-y-4">
-                {/* 名称输入 */}
-                <div className="space-y-2">
-                  <Label htmlFor="skill-name">名称 *</Label>
-                  <Input
-                    id="skill-name"
-                    placeholder="my-skill"
-                    value={createForm.name}
-                    onChange={(e) => setCreateForm({ ...createForm, name: e.target.value })}
-                  />
-                  <p className="text-xs text-muted-foreground">
-                    只能包含字母、数字、连字符和下划线
-                  </p>
-                </div>
-
-                {/* 描述输入 */}
-                <div className="space-y-2">
-                  <Label htmlFor="skill-description">描述</Label>
-                  <Input
-                    id="skill-description"
-                    placeholder="这个 Skill 的功能描述"
-                    value={createForm.description}
-                    onChange={(e) => setCreateForm({ ...createForm, description: e.target.value })}
-                  />
-                </div>
-
-                {/* 模板选择 */}
-                <div className="space-y-2">
-                  <Label>模板类型</Label>
-                  <div className="flex gap-2">
-                    {[
-                      { value: 'basic', label: '基础模板', desc: '简单的 Skill 模板' },
-                      { value: 'tool-calling', label: '工具调用', desc: '可以调用 Claude Code 工具' },
-                      { value: 'agent', label: '代理模式', desc: '启动子代理执行任务' },
-                    ].map((template) => (
-                      <Card
-                        key={template.value}
-                        className={cn(
-                          'flex-1 cursor-pointer transition-colors',
-                          createForm.template === template.value
-                            ? 'border-primary bg-primary/5'
-                            : 'hover:border-primary/50'
-                        )}
-                        onClick={() => setCreateForm({ ...createForm, template: template.value as any })}
-                      >
-                        <CardHeader className="p-4">
-                          <CardTitle className="text-sm">{template.label}</CardTitle>
-                          <CardDescription className="text-xs">{template.desc}</CardDescription>
-                        </CardHeader>
-                      </Card>
-                    ))}
-                  </div>
-                </div>
-
-                {/* 用户可调用开关 */}
-                <div className="flex items-center space-x-2">
-                  <Switch
-                    id="user-invocable"
-                    checked={createForm.userInvocable}
-                    onCheckedChange={(checked) => setCreateForm({ ...createForm, userInvocable: checked })}
-                  />
-                  <Label htmlFor="user-invocable">在 / 菜单中显示</Label>
-                </div>
-
-                {/* 错误提示 */}
-                {createError && (
-                  <p className="text-sm text-destructive">{createError}</p>
-                )}
-
-                {/* 按钮 */}
-                <div className="flex justify-end gap-2">
-                  <Button
-                    variant="outline"
-                    onClick={() => {
-                      setCreateDialogOpen(false);
-                      setCreateError(null);
-                    }}
-                    disabled={creating}
-                  >
-                    取消
-                  </Button>
-                  <Button onClick={handleCreateSkill} disabled={creating}>
-                    {creating ? '创建中...' : '创建'}
-                  </Button>
-                </div>
-              </div>
-            </DialogContent>
-          </Dialog>
           <Dialog open={installDialogOpen} onOpenChange={setInstallDialogOpen}>
             <DialogTrigger asChild>
               <Button variant="default" size="sm">

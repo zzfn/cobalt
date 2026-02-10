@@ -3,9 +3,11 @@ pub mod config;
 pub mod skills;
 pub mod marketplace;
 pub mod workspace;
+pub mod stats;
 
 // 重新导出所有命令
 pub use config::*;
 pub use skills::*;
 pub use marketplace::*;
 pub use workspace::*;
+pub use stats::*;

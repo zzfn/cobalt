@@ -9,6 +9,7 @@ import SkillsList from '@/pages/Skills/List';
 import SkillDetail from '@/pages/Skills/Detail';
 import MarketplaceList from '@/pages/Skills/Marketplace/List';
 import MarketplaceDetail from '@/pages/Skills/Marketplace/Detail';
+import TokenUsage from '@/pages/TokenUsage';
 import { GlassCardExample } from '@/components/examples/GlassCardExample';
 import GlassTest from '@/pages/GlassTest';
 
@@ -49,6 +50,10 @@ export const router = createBrowserRouter([
             element: <SettingsJsonEditor />,
           },
         ],
+      },
+      {
+        path: 'token-usage',
+        element: <TokenUsage />,
       },
       {
         path: 'skills',
