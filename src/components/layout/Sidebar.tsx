@@ -19,6 +19,7 @@ import {
   Database,
   Terminal,
   BarChart3,
+  HardDrive,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
@@ -74,6 +75,11 @@ const navItems: NavItem[] = [
         title: 'settings.json',
         href: '/settings/settings-json',
         icon: FileJson,
+      },
+      {
+        title: '缓存管理',
+        href: '/settings/cache',
+        icon: HardDrive,
       },
     ],
   },

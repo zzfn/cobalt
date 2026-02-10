@@ -5,9 +5,9 @@ import type { LucideIcon } from 'lucide-react';
 
 interface StatCardProps {
   title: string;
-  value: number;
+  value: string | number;
   description?: string;
-  icon: LucideIcon;
+  icon?: LucideIcon;
   href?: string;
   trend?: {
     value: number;
@@ -60,9 +60,11 @@ export default function StatCard({
               <p className="text-xs text-muted-foreground">{description}</p>
             )}
           </div>
-          <div className="rounded-lg bg-primary/10 p-3">
-            <Icon className="h-6 w-6 text-primary" />
-          </div>
+          {Icon && (
+            <div className="rounded-lg bg-primary/10 p-2">
+              <Icon className="h-4 w-4 text-primary" />
+            </div>
+          )}
         </div>
       </CardContent>
     </Card>

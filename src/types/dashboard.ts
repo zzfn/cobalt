@@ -68,7 +68,7 @@ export interface ConfigHealth {
  */
 export interface StatCardData {
   title: string;
-  value: number;
+  value: string | number;
   description?: string;
   icon: React.ComponentType<{ className?: string }>;
   href?: string;

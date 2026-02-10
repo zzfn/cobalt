@@ -22,6 +22,8 @@ use commands::{
     get_current_workspace, update_workspace, refresh_workspace, init_workspace_skills_dir,
     // 统计命令
     read_stats_cache, get_claude_code_version,
+    // 缓存管理命令
+    get_cache_info, clear_cache,
 };
 
 #[cfg(target_os = "macos")]
@@ -136,6 +138,9 @@ pub fn run() {
             // 统计命令
             read_stats_cache,
             get_claude_code_version,
+            // 缓存管理命令
+            get_cache_info,
+            clear_cache,
             // 窗口主题
             set_window_theme,
         ])

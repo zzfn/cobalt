@@ -5,6 +5,7 @@ import GeneralSettings from '@/pages/Settings/General';
 import InstructionsSettings from '@/pages/Settings/Instructions';
 import ClaudeCodeSettings from '@/pages/Settings/ClaudeCode';
 import SettingsJsonEditor from '@/pages/Settings/SettingsJson';
+import CacheSettings from '@/pages/Settings/Cache';
 import SkillsList from '@/pages/Skills/List';
 import SkillDetail from '@/pages/Skills/Detail';
 import MarketplaceList from '@/pages/Skills/Marketplace/List';
@@ -48,6 +49,10 @@ export const router = createBrowserRouter([
           {
             path: 'settings-json',
             element: <SettingsJsonEditor />,
+          },
+          {
+            path: 'cache',
+            element: <CacheSettings />,
           },
         ],
       },

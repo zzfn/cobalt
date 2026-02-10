@@ -1,4 +1,3 @@
-import { Coins, MessageSquare, MonitorPlay, Cpu } from 'lucide-react';
 import StatCard from '@/components/dashboard/StatCard';
 import type { TokenOverview } from '@/types/tokenUsage';
 
@@ -20,27 +19,23 @@ export default function OverviewCards({ overview, loading }: OverviewCardsProps)
     <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
       <StatCard
         title="总 Token"
-        value={overview.totalTokens}
-        description={formatNumber(overview.totalTokens)}
-        icon={Coins}
+        value={formatNumber(overview.totalTokens)}
+        description={overview.totalTokens.toLocaleString()}
         loading={loading}
       />
       <StatCard
         title="总会话"
-        value={overview.totalSessions}
-        icon={MonitorPlay}
+        value={overview.totalSessions.toLocaleString()}
         loading={loading}
       />
       <StatCard
         title="总消息"
-        value={overview.totalMessages}
-        icon={MessageSquare}
+        value={overview.totalMessages.toLocaleString()}
         loading={loading}
       />
       <StatCard
         title="模型数"
         value={overview.modelCount}
-        icon={Cpu}
         loading={loading}
       />
     </div>
