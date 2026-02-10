@@ -1,9 +1,7 @@
 import { useEffect, useState } from 'react';
-import { Terminal, Save, RefreshCw } from 'lucide-react';
+import { Key, Save, RefreshCw } from 'lucide-react';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
-import PermissionsCard from '@/components/settings/PermissionsCard';
-import EnvVariablesCard from '@/components/settings/EnvVariablesCard';
 import ApiKeyCard from '@/components/settings/ApiKeyCard';
 import {
   readSettings,
@@ -70,10 +68,8 @@ export default function ClaudeCodeSettings() {
       ]);
       toast.success('配置已保存');
       setHasChanges(false);
-      // 记录活动
-      logActivity('settings_update', '更新了 Claude Code 配置', {
-        envVarsCount: Object.keys(settings.env || {}).length,
-        permissionsCount: (settings.permissions?.allow.length || 0) + (settings.permissions?.deny.length || 0),
+      logActivity('settings_update', '更新了 API Key 配置', {
+        profilesCount: profiles.length,
       });
     } catch (error) {
       toast.error('保存配置失败', {
@@ -110,35 +106,6 @@ export default function ClaudeCodeSettings() {
         description: String(error),
       });
     }
-  };
-
-  // 更新权限
-  const handleAllowChange = (allow: string[]) => {
-    setSettings((prev) => ({
-      ...prev,
-      permissions: {
-        allow,
-        deny: prev.permissions?.deny || []
-      },
-    }));
-    setHasChanges(true);
-  };
-
-  const handleDenyChange = (deny: string[]) => {
-    setSettings((prev) => ({
-      ...prev,
-      permissions: {
-        allow: prev.permissions?.allow || [],
-        deny
-      },
-    }));
-    setHasChanges(true);
-  };
-
-  // 更新环境变量
-  const handleEnvChange = (env: Record<string, string>) => {
-    setSettings((prev) => ({ ...prev, env }));
-    setHasChanges(true);
   };
 
   // 更新 API Key
@@ -191,10 +158,10 @@ export default function ClaudeCodeSettings() {
       {/* 页面标题 */}
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-3">
-          <Terminal className="h-8 w-8" />
+          <Key className="h-8 w-8" />
           <div>
-            <h1 className="text-2xl font-bold">Claude Code 配置</h1>
-            <p className="text-muted-foreground">管理 Claude Code 的核心配置</p>
+            <h1 className="text-2xl font-bold">API Key</h1>
+            <p className="text-muted-foreground">管理 Claude Code 的 API 配置档案</p>
           </div>
         </div>
         <div className="flex items-center gap-2">
@@ -223,17 +190,6 @@ export default function ClaudeCodeSettings() {
         onSaveProfiles={handleSaveProfiles}
         onUseOfficialApi={handleUseOfficialApi}
       />
-
-      {/* 权限管理 */}
-      <PermissionsCard
-        allow={settings.permissions?.allow || []}
-        deny={settings.permissions?.deny || []}
-        onAllowChange={handleAllowChange}
-        onDenyChange={handleDenyChange}
-      />
-
-      {/* 环境变量 */}
-      <EnvVariablesCard env={settings.env || {}} onChange={handleEnvChange} />
     </div>
   );
 }

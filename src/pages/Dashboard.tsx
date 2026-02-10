@@ -5,7 +5,6 @@ import {
   Sparkles,
   ToggleRight,
   Key,
-  Variable,
   RefreshCw,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -156,14 +155,6 @@ export default function Dashboard() {
           value={stats?.profiles.total ?? 0}
           description={stats?.profiles.activeId ? '1 个激活' : '未激活'}
           icon={Key}
-          href="/settings/general"
-          loading={loading}
-        />
-        <StatCard
-          title="环境变量"
-          value={stats?.config.envVarsCount ?? 0}
-          description="settings.json"
-          icon={Variable}
           href="/settings/general"
           loading={loading}
         />
