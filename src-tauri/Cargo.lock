@@ -460,7 +460,7 @@ dependencies = [
 
 [[package]]
 name = "cobalt"
-version = "0.3.2"
+version = "0.3.3"
 dependencies = [
  "chrono",
  "cocoa",
