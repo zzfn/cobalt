@@ -1,7 +1,8 @@
 import { useEffect, useState } from 'react';
-import { Key, Save, RefreshCw } from 'lucide-react';
+import { Key, Save, RefreshCw, AlertTriangle, Trash2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
+import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import ApiKeyCard from '@/components/settings/ApiKeyCard';
 import {
   readSettings,
@@ -10,7 +11,10 @@ import {
   writeApiProfiles,
   switchApiProfile,
   clearApiConfig,
+  detectEnvConflicts,
+  removeEnvFromShell,
 } from '@/services/config';
+import type { EnvConflict } from '@/services/config';
 import { logActivity } from '@/lib/activityLogger';
 import type { ClaudeCodeSettings, ApiKeyProfile } from '@/types/settings';
 
@@ -28,6 +32,8 @@ export default function ClaudeCodeSettings() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [hasChanges, setHasChanges] = useState(false);
+  const [envConflicts, setEnvConflicts] = useState<EnvConflict[]>([]);
+  const [removingConflicts, setRemovingConflicts] = useState(false);
 
   // 从 env 中提取 API Key 和 Base URL
   const currentApiKey = settings.env?.[ENV_API_KEY] || '';
@@ -37,13 +43,15 @@ export default function ClaudeCodeSettings() {
   const loadConfig = async () => {
     setLoading(true);
     try {
-      const [settingsData, profilesData] = await Promise.all([
+      const [settingsData, profilesData, conflicts] = await Promise.all([
         readSettings(),
         readApiProfiles(),
+        detectEnvConflicts(),
       ]);
       setSettings(settingsData);
       setProfiles(profilesData.profiles);
       setActiveProfileId(profilesData.activeProfileId);
+      setEnvConflicts(conflicts);
       setHasChanges(false);
     } catch (error) {
       toast.error('加载配置失败', {
@@ -145,6 +153,40 @@ export default function ClaudeCodeSettings() {
     await writeApiProfiles({ profiles: newProfiles, activeProfileId: newActiveProfileId });
   };
 
+  // 删除冲突的环境变量
+  const handleRemoveConflicts = async () => {
+    if (envConflicts.length === 0) return;
+
+    setRemovingConflicts(true);
+    try {
+      const modifiedFiles = await removeEnvFromShell(envConflicts);
+      const fileList = modifiedFiles.map(f => `~/${f}`).join(', ');
+      toast.success('已删除冲突的环境变量', {
+        description: `修改了: ${fileList}\n请在终端执行 source 命令使其生效`,
+        action: {
+          label: '复制命令',
+          onClick: () => {
+            const sourceCmd = modifiedFiles.map(f => `source ~/${f}`).join(' && ');
+            navigator.clipboard.writeText(sourceCmd);
+            toast.success('已复制到剪贴板');
+          },
+        },
+        duration: 10000,
+      });
+      setEnvConflicts([]);
+      logActivity('settings_update', '删除了 Shell 环境变量冲突', {
+        files: modifiedFiles,
+        conflicts: envConflicts.length,
+      });
+    } catch (error) {
+      toast.error('删除环境变量失败', {
+        description: String(error),
+      });
+    } finally {
+      setRemovingConflicts(false);
+    }
+  };
+
   if (loading) {
     return (
       <div className="flex items-center justify-center h-64">
@@ -177,6 +219,46 @@ export default function ClaudeCodeSettings() {
       </div>
 
       {/* API 配置 */}
+      {/* 环境变量冲突提示 */}
+      {envConflicts.length > 0 && (
+        <Alert variant="destructive">
+          <AlertTriangle className="h-4 w-4" />
+          <AlertTitle className="flex items-center justify-between">
+            <span>检测到环境变量冲突</span>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={handleRemoveConflicts}
+              disabled={removingConflicts}
+              className="ml-2"
+            >
+              <Trash2 className="h-4 w-4 mr-1" />
+              {removingConflicts ? '删除中...' : '删除冲突变量'}
+            </Button>
+          </AlertTitle>
+          <AlertDescription className="mt-2">
+            <p className="text-sm mb-2">
+              以下 Shell 环境变量会覆盖 Cobalt 的配置，导致配置不生效：
+            </p>
+            <ul className="text-sm space-y-1">
+              {envConflicts.map((conflict, index) => (
+                <li key={index} className="flex items-center gap-2">
+                  <code className="px-1.5 py-0.5 bg-destructive/10 rounded text-xs">
+                    {conflict.key}
+                  </code>
+                  <span className="text-muted-foreground">
+                    在 ~/{conflict.shellFile} 第 {conflict.lineNumber} 行
+                  </span>
+                </li>
+              ))}
+            </ul>
+            <p className="text-sm mt-2 text-muted-foreground">
+              点击「删除冲突变量」后将移除这些环境变量。删除后需要在终端执行 source 命令使其生效。
+            </p>
+          </AlertDescription>
+        </Alert>
+      )}
+
       <ApiKeyCard
         profiles={profiles}
         activeProfileId={activeProfileId}

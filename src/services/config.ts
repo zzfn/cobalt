@@ -197,3 +197,25 @@ export async function readConversationHistory(limit?: number): Promise<ActivityR
     },
   }));
 }
+
+// 环境变量冲突信息
+export interface EnvConflict {
+  key: string;
+  shellFile: string;
+  lineNumber: number;
+  lineContent: string;
+}
+
+/**
+ * 检测 shell 配置文件中的环境变量冲突
+ */
+export async function detectEnvConflicts(): Promise<EnvConflict[]> {
+  return invoke<EnvConflict[]>('detect_env_conflicts');
+}
+
+/**
+ * 删除 shell 配置文件中的环境变量
+ */
+export async function removeEnvFromShell(conflicts: EnvConflict[]): Promise<string[]> {
+  return invoke<string[]>('remove_env_from_shell', { conflicts });
+}

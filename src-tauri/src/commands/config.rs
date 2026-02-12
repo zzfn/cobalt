@@ -308,3 +308,154 @@ pub fn read_conversation_history(limit: Option<usize>) -> Result<Vec<Conversatio
 
     Ok(records)
 }
+
+/// 环境变量冲突信息
+#[derive(Debug, Serialize, Deserialize, Clone)]
+#[serde(rename_all = "camelCase")]
+pub struct EnvConflict {
+    pub key: String,
+    pub shell_file: String,
+    pub line_number: usize,
+    pub line_content: String,
+}
+
+/// 获取 shell 配置文件路径列表
+fn get_shell_config_files() -> Vec<PathBuf> {
+    let home = match dirs::home_dir() {
+        Some(h) => h,
+        None => return Vec::new(),
+    };
+
+    let mut files = Vec::new();
+
+    // 常见的 shell 配置文件
+    let config_files = [
+        ".zshrc",
+        ".bashrc",
+        ".bash_profile",
+        ".profile",
+        ".zprofile",
+        ".zshenv",
+    ];
+
+    for filename in config_files {
+        let path = home.join(filename);
+        if path.exists() {
+            files.push(path);
+        }
+    }
+
+    files
+}
+
+/// 检测 shell 配置文件中的环境变量冲突
+#[tauri::command]
+pub fn detect_env_conflicts() -> Result<Vec<EnvConflict>, String> {
+    let conflict_keys = [
+        "ANTHROPIC_AUTH_TOKEN",
+        "ANTHROPIC_BASE_URL",
+        "ANTHROPIC_API_KEY",
+    ];
+
+    let mut conflicts = Vec::new();
+
+    for config_file in get_shell_config_files() {
+        let content = match fs::read_to_string(&config_file) {
+            Ok(c) => c,
+            Err(_) => continue,
+        };
+
+        let filename = config_file
+            .file_name()
+            .map(|n| n.to_string_lossy().to_string())
+            .unwrap_or_else(|| config_file.to_string_lossy().to_string());
+
+        for (line_number, line) in content.lines().enumerate() {
+            let trimmed = line.trim();
+
+            // 跳过注释行
+            if trimmed.starts_with('#') {
+                continue;
+            }
+
+            // 检测 export 语句
+            for key in &conflict_keys {
+                // 匹配 export KEY= 或 export KEY ="value" 等格式
+                let patterns = [
+                    format!("export {}=", key),
+                    format!("export {} =", key),
+                    format!("export\t{}=", key),
+                ];
+
+                if patterns.iter().any(|p| trimmed.starts_with(p)) {
+                    conflicts.push(EnvConflict {
+                        key: key.to_string(),
+                        shell_file: filename.clone(),
+                        line_number: line_number + 1,
+                        line_content: trimmed.to_string(),
+                    });
+                }
+            }
+        }
+    }
+
+    Ok(conflicts)
+}
+
+/// 删除 shell 配置文件中的环境变量
+#[tauri::command]
+pub fn remove_env_from_shell(conflicts: Vec<EnvConflict>) -> Result<Vec<String>, String> {
+    let home = dirs::home_dir().ok_or_else(|| "无法获取用户主目录".to_string())?;
+    let mut modified_files: Vec<String> = Vec::new();
+
+    // 按文件分组冲突
+    let mut file_conflicts: std::collections::HashMap<String, Vec<&EnvConflict>> =
+        std::collections::HashMap::new();
+
+    for conflict in &conflicts {
+        file_conflicts
+            .entry(conflict.shell_file.clone())
+            .or_default()
+            .push(conflict);
+    }
+
+    for (shell_file, file_conflict_list) in file_conflicts {
+        let file_path = home.join(&shell_file);
+
+        if !file_path.exists() {
+            continue;
+        }
+
+        let content = fs::read_to_string(&file_path)
+            .map_err(|e| format!("读取 {} 失败: {}", shell_file, e))?;
+
+        // 收集需要删除的行号（转换为 0-indexed）
+        let lines_to_remove: std::collections::HashSet<usize> = file_conflict_list
+            .iter()
+            .map(|c| c.line_number - 1)
+            .collect();
+
+        // 过滤掉需要删除的行
+        let new_content: String = content
+            .lines()
+            .enumerate()
+            .filter(|(i, _)| !lines_to_remove.contains(i))
+            .map(|(_, line)| line)
+            .collect::<Vec<_>>()
+            .join("\n");
+
+        // 确保文件末尾有换行符
+        let final_content = if new_content.is_empty() || new_content.ends_with('\n') {
+            new_content
+        } else {
+            format!("{}\n", new_content)
+        };
+
+        fs::write(&file_path, final_content)
+            .map_err(|e| format!("写入 {} 失败: {}", shell_file, e))?;
+
+        modified_files.push(shell_file);
+    }
+
+    Ok(modified_files)
+}
