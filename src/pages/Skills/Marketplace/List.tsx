@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useAtom, useSetAtom } from 'jotai';
 import { useNavigate } from 'react-router-dom';
+import { openUrl } from '@tauri-apps/plugin-opener';
 import {
   Database,
   Plus,
@@ -399,7 +400,7 @@ export default function MarketplaceList() {
                       className="h-8 w-8"
                       onClick={(e) => {
                         e.stopPropagation();
-                        window.open(source.url, '_blank');
+                        openUrl(source.url);
                       }}
                     >
                       <ExternalLink className="h-4 w-4" />

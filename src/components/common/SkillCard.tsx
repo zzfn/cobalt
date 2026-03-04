@@ -1,5 +1,6 @@
 import { Link } from 'react-router-dom';
 import { Sparkles, ExternalLink, Trash2, Database } from 'lucide-react';
+import { openUrl } from '@tauri-apps/plugin-opener';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Switch } from '@/components/ui/switch';
@@ -77,51 +78,63 @@ export default function SkillCard({ skill, onToggle, onDelete, className, source
         <CardDescription className="line-clamp-2">{skill.description}</CardDescription>
       </CardHeader>
       <CardContent>
-        <div className="flex flex-wrap items-center gap-2">
-          {skill.metadata.sourceId && sourceName && (
-            <Badge variant="secondary" className="text-xs bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200">
-              <Database className="h-3 w-3 mr-1" />
-              来自: {sourceName}
-            </Badge>
-          )}
-          {skill.installedBy && skill.installedBy.length > 0 && (
-            <Badge variant="secondary" className="text-xs bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200">
-              安装自: {skill.installedBy.map(tool => {
-                const toolMeta = AI_TOOL_META[tool as keyof typeof AI_TOOL_META];
-                return toolMeta ? `${toolMeta.icon} ${toolMeta.displayName}` : tool;
-              }).join(', ')}
-            </Badge>
-          )}
-          {skill.metadata.targetTools?.map((toolType) => {
-            const toolMeta = AI_TOOL_META[toolType as keyof typeof AI_TOOL_META];
-            if (!toolMeta) return null;
-            return (
-              <Badge
-                key={toolType}
-                variant="outline"
-                className="text-xs"
-                title={`适用于 ${toolMeta.displayName}`}
-              >
-                {toolMeta.icon} {toolMeta.displayName}
+        <div className="space-y-2">
+          <div className="flex flex-wrap items-center gap-2">
+            {skill.metadata.sourceId && sourceName && (
+              <Badge variant="secondary" className="text-xs">
+                <Database className="mr-1 h-3 w-3" />
+                来自 {sourceName}
               </Badge>
-            );
-          })}
-          {skill.metadata.tags?.slice(0, 3).map((tag) => (
-            <Badge key={tag} variant="outline" className="text-xs">
-              {tag}
-            </Badge>
-          ))}
+            )}
+            {skill.installedBy && skill.installedBy.length > 0 && (
+              <div className="inline-flex flex-wrap items-center gap-1.5 rounded-md border border-border/70 bg-muted/35 px-2 py-1 text-xs text-muted-foreground">
+                <span className="font-medium text-foreground/80">安装自</span>
+                {skill.installedBy.map((tool) => {
+                  const toolMeta = AI_TOOL_META[tool as keyof typeof AI_TOOL_META];
+                  return (
+                    <span
+                      key={tool}
+                      className="inline-flex items-center gap-1 rounded border border-border/70 bg-background px-1.5 py-0.5 text-[11px] text-foreground/90"
+                    >
+                      <span>{toolMeta?.icon ?? '•'}</span>
+                      <span>{toolMeta?.displayName ?? tool}</span>
+                    </span>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+          <div className="flex flex-wrap items-center gap-2">
+            {skill.metadata.targetTools?.map((toolType) => {
+              const toolMeta = AI_TOOL_META[toolType as keyof typeof AI_TOOL_META];
+              if (!toolMeta) return null;
+              return (
+                <Badge
+                  key={toolType}
+                  variant="outline"
+                  className="text-xs"
+                  title={`适用于 ${toolMeta.displayName}`}
+                >
+                  {toolMeta.icon} {toolMeta.displayName}
+                </Badge>
+              );
+            })}
+            {skill.metadata.tags?.slice(0, 3).map((tag) => (
+              <Badge key={tag} variant="outline" className="text-xs">
+                {tag}
+              </Badge>
+            ))}
+          </div>
         </div>
         {skill.url && (
-          <a
-            href={skill.url}
-            target="_blank"
-            rel="noopener noreferrer"
+          <button
+            type="button"
             className="mt-2 inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground"
+            onClick={(e) => { e.stopPropagation(); openUrl(skill.url!); }}
           >
             <ExternalLink className="h-3 w-3" />
             查看源
-          </a>
+          </button>
         )}
       </CardContent>
     </Card>
