@@ -10,6 +10,7 @@ import ActivityList from '@/components/dashboard/ActivityList';
 import RecentProjects from '@/components/dashboard/RecentProjects';
 import TokenUsageOverview from '@/components/dashboard/TokenUsageOverview';
 import WorkspaceInfo from '@/components/dashboard/WorkspaceInfo';
+import NetworkChecker from '@/components/dashboard/NetworkChecker';
 import {
   recentActivitiesAtom,
   dashboardLoadingAtom,
@@ -96,6 +97,9 @@ export default function Dashboard() {
         <TokenUsageOverview stats={tokenStats} loading={loading} />
         <WorkspaceInfo />
       </div>
+
+      {/* 网络检测 */}
+      <NetworkChecker />
 
       {/* 第二行：最近项目 + 最近对话 */}
       <div className="grid gap-6 lg:grid-cols-2">
