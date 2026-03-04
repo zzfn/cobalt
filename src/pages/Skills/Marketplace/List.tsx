@@ -168,6 +168,7 @@ export default function MarketplaceList() {
       await updateMarketplace({
         sourceId: editingSource.id,
         name: editingSource.name,
+        url: editingSource.url,
         tags: editingSource.tags,
         description: editingSource.description,
         priority: editingSource.priority,
@@ -480,6 +481,16 @@ export default function MarketplaceList() {
                   value={editingSource.name}
                   onChange={(e) =>
                     setEditingSource({ ...editingSource, name: e.target.value })
+                  }
+                />
+              </div>
+              <div>
+                <Label htmlFor="edit-url">地址</Label>
+                <Input
+                  id="edit-url"
+                  value={editingSource.url}
+                  onChange={(e) =>
+                    setEditingSource({ ...editingSource, url: e.target.value })
                   }
                 />
               </div>

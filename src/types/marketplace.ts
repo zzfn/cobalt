@@ -54,6 +54,7 @@ export interface AddMarketplaceParams {
 export interface UpdateMarketplaceParams {
   sourceId: string;
   name?: string;
+  url?: string;
   tags?: string[];
   description?: string;
   priority?: number;

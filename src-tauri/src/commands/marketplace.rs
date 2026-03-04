@@ -340,6 +340,7 @@ pub fn toggle_marketplace(source_id: String, enabled: bool) -> Result<(), String
 pub fn update_marketplace(
     source_id: String,
     name: Option<String>,
+    url: Option<String>,
     tags: Option<Vec<String>>,
     description: Option<String>,
     priority: Option<i32>,
@@ -354,6 +355,11 @@ pub fn update_marketplace(
 
     if let Some(n) = name {
         source.name = n;
+    }
+    if let Some(u) = url {
+        source.url = u;
+        // URL 变更后重置刷新时间，触发重新拉取
+        source.last_refreshed = None;
     }
     if let Some(t) = tags {
         source.tags = t;
