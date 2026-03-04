@@ -259,15 +259,6 @@ export default function SkillsList() {
   };
 
 
-  const installedByFilters = [
-    { value: 'all', label: '全部', icon: '🤖' },
-    { value: 'claude-code', label: 'Claude Code', icon: '🤖' },
-    { value: 'cursor', label: 'Cursor', icon: '⚡' },
-    { value: 'codex', label: 'Codex', icon: '🔮' },
-    { value: 'opencode', label: 'OpenCode', icon: '🌟' },
-    { value: 'antigravity', label: 'Antigravity', icon: '🚀' },
-  ] as const;
-
   const toolFilters = [
     { value: 'all', label: '全部工具', icon: '🤖' },
     { value: 'claude-code', label: 'Claude Code', icon: '🤖' },
@@ -584,26 +575,6 @@ export default function SkillsList() {
               <DialogDescription>选择要显示的 Skills 类型</DialogDescription>
             </DialogHeader>
             <div className="space-y-4">
-              <div>
-                <p className="mb-2 text-sm font-medium">安装工具</p>
-                <div className="flex flex-wrap gap-2">
-                  {installedByFilters.map((option) => (
-                    <Badge
-                      key={option.value}
-                      variant={
-                        filter.installedBy === option.value ? 'default' : 'outline'
-                      }
-                      className="cursor-pointer gap-1"
-                      onClick={() =>
-                        setFilter({ ...filter, installedBy: option.value })
-                      }
-                    >
-                      <span>{option.icon}</span>
-                      <span>{option.label}</span>
-                    </Badge>
-                  ))}
-                </div>
-              </div>
               <div>
                 <p className="mb-2 text-sm font-medium">适用工具</p>
                 <div className="flex flex-wrap gap-2">

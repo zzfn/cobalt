@@ -143,8 +143,7 @@ export interface SkillManifest {
  */
 export interface SkillFilter {
   search?: string;
-  installedBy?: AiToolType | 'all';  // 按安装工具过滤
-  targetTool?: AiToolType | 'all';  // 按 AI 工具过滤
+  targetTool?: AiToolType | 'all';  // 按适用工具过滤
   enabled?: boolean;
   tags?: string[];
 }

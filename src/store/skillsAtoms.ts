@@ -17,7 +17,6 @@ export const selectedSkillAtom = atom<SkillDetail | null>(null);
 // Skills 过滤器
 export const skillsFilterAtom = atom<SkillFilter>({
   search: '',
-  installedBy: 'all',
   targetTool: 'all',
   enabled: undefined,
   tags: [],
@@ -52,13 +51,6 @@ export const filteredSkillsAtom = atom((get) => {
       (skill) =>
         skill.name.toLowerCase().includes(searchLower) ||
         skill.description.toLowerCase().includes(searchLower)
-    );
-  }
-
-  // 安装工具过滤
-  if (filter.installedBy && filter.installedBy !== 'all') {
-    filtered = filtered.filter((skill) =>
-      skill.installedBy?.includes(filter.installedBy as AiToolType)
     );
   }
 
