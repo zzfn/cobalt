@@ -43,9 +43,8 @@ const navGroups: NavGroup[] = [
   {
     items: [
       { title: '仪表板', href: '/dashboard', icon: LayoutDashboard },
-      { title: 'Skills', href: '/skills', icon: Sparkles },
       { title: 'Skill 市场', href: '/skills/marketplace', icon: Database },
-      { title: 'Token 用量', href: '/token-usage', icon: BarChart3 },
+      { title: 'Skills', href: '/skills', icon: Sparkles },
     ],
   },
   {
@@ -59,6 +58,7 @@ const navGroups: NavGroup[] = [
           { title: 'CLAUDE.md', href: '/settings/instructions', icon: FileText },
           { title: 'settings.json', href: '/settings/settings-json', icon: FileJson },
           { title: '缓存管理', href: '/settings/cache', icon: HardDrive },
+          { title: 'Token 用量', href: '/token-usage', icon: BarChart3 },
         ],
       },
       { title: '通用设置', href: '/settings/general', icon: Settings },
