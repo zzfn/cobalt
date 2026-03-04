@@ -168,6 +168,9 @@ pub struct CachedSkillInfo {
     pub installed_version: Option<String>,
     #[serde(default)]
     pub has_update: bool,
+    /// SKILL.md 的内容，用于预览
+    #[serde(default)]
+    pub skill_content: Option<String>,
 }
 
 /// 市场缓存
@@ -529,6 +532,7 @@ fn scan_marketplace_skills(source_dir: &PathBuf) -> Result<Vec<CachedSkillInfo>,
             installed,
             installed_version,
             has_update,
+            skill_content: content,
         });
         return Ok(skills);
     }
@@ -581,6 +585,7 @@ fn scan_marketplace_skills(source_dir: &PathBuf) -> Result<Vec<CachedSkillInfo>,
                         installed,
                         installed_version,
                         has_update,
+                        skill_content: content,
                     });
 
                     println!("  ✓ {}", skill_name);

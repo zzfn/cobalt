@@ -26,6 +26,7 @@ import {
 import { parseGitAuthChallenge } from '@/services/skills';
 import { TargetToolsDialog } from '@/components/skills/TargetToolsDialog';
 import { GitAuthDialog } from '@/components/skills/GitAuthDialog';
+import { MarketplaceSkillPreviewDialog } from '@/components/skills/MarketplaceSkillPreviewDialog';
 import type { CachedSkillInfo } from '@/types/marketplace';
 import type { GitAuthChallenge, GitAuthInput } from '@/types/skills';
 
@@ -49,6 +50,9 @@ export default function MarketplaceDetail() {
   const [authDialogOpen, setAuthDialogOpen] = useState(false);
   const [authChallenge, setAuthChallenge] = useState<GitAuthChallenge | null>(null);
   const [authDialogLoading, setAuthDialogLoading] = useState(false);
+
+  // 预览对话框状态
+  const [previewSkill, setPreviewSkill] = useState<CachedSkillInfo | null>(null);
 
   const source = sources.find((s) => s.id === sourceId);
   const cache = sourceId ? caches[sourceId] : null;
@@ -347,7 +351,11 @@ export default function MarketplaceDetail() {
           {/* Skills 卡片列表 */}
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
             {filteredSkills.map((skill) => (
-              <Card key={skill.name} className="hover:shadow-lg transition-shadow flex flex-col">
+              <Card
+                key={skill.name}
+                className="hover:shadow-lg transition-shadow flex flex-col cursor-pointer"
+                onClick={() => setPreviewSkill(skill)}
+              >
                 <CardHeader className="flex-1">
                   <div className="flex items-start gap-3">
                     <Checkbox
@@ -407,7 +415,7 @@ export default function MarketplaceDetail() {
                       className="w-full mt-2"
                       variant={skill.installed ? 'outline' : 'default'}
                       size="sm"
-                      onClick={() => handleInstallSkill(skill.name)}
+                      onClick={(e) => { e.stopPropagation(); handleInstallSkill(skill.name); }}
                       disabled={skill.installed && !skill.hasUpdate}
                     >
                       {skill.hasUpdate ? '更新' : skill.installed ? '已安装' : '安装'}
@@ -419,6 +427,18 @@ export default function MarketplaceDetail() {
           </div>
         </div>
       )}
+
+      {/* Skill 预览对话框 */}
+      <MarketplaceSkillPreviewDialog
+        open={!!previewSkill}
+        onOpenChange={(open) => { if (!open) setPreviewSkill(null); }}
+        skill={previewSkill}
+        onInstall={(skillName) => {
+          setPreviewSkill(null);
+          handleInstallSkill(skillName);
+        }}
+        installing={installing}
+      />
 
       {/* 目标工具选择对话框 */}
       <TargetToolsDialog

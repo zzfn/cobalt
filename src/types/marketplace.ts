@@ -34,6 +34,8 @@ export interface CachedSkillInfo {
   installed: boolean;
   installedVersion?: string;
   hasUpdate: boolean;
+  /** SKILL.md 的内容，用于预览 */
+  skillContent?: string;
 }
 
 export interface MarketplaceCache {
