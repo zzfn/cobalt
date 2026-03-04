@@ -3,6 +3,7 @@ import { useAtom } from 'jotai';
 import { useEffect, useState } from 'react';
 import { getVersion } from '@tauri-apps/api/app';
 import { useAppUpdate } from '@/hooks/useAppUpdate';
+import { toast } from 'sonner';
 import {
   LayoutDashboard,
   Settings,
@@ -72,7 +73,7 @@ export default function Sidebar() {
   const location = useLocation();
   const [version, setVersion] = useState<string>('');
   const [ccVersion, setCcVersion] = useState<string>('');
-  const { checkingUpdate, checkForUpdate } = useAppUpdate();
+  const { checkingUpdate, checkForUpdate, downloadAndInstall } = useAppUpdate();
 
   useEffect(() => {
     getVersion().then(setVersion).catch(console.error);
@@ -250,7 +251,19 @@ export default function Sidebar() {
               variant="ghost"
               size="icon"
               className="h-6 w-6 rounded-sm hover:bg-sidebar-item-hover"
-              onClick={() => checkForUpdate(version)}
+              onClick={async () => {
+                const update = await checkForUpdate(version);
+                if (update) {
+                  toast.info('发现新版本', {
+                    description: `版本 ${update.version} 可用，点击立即更新`,
+                    action: {
+                      label: '立即更新',
+                      onClick: () => downloadAndInstall(update),
+                    },
+                    duration: 10000,
+                  });
+                }
+              }}
               disabled={checkingUpdate}
               title="检查更新"
             >

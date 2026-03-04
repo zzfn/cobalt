@@ -1,5 +1,5 @@
-import { useEffect, useState } from 'react';
-import { check } from '@tauri-apps/plugin-updater';
+import { useEffect, useState, useRef } from 'react';
+import { check, type Update } from '@tauri-apps/plugin-updater';
 import { relaunch } from '@tauri-apps/plugin-process';
 import { toast } from 'sonner';
 import {
@@ -23,6 +23,8 @@ export default function UpdateChecker() {
   const [downloadProgress, setDownloadProgress] = useState(0);
   const [totalSize, setTotalSize] = useState(0);
   const [installing, setInstalling] = useState(false);
+  // 缓存 update 对象，避免 handleUpdate 重复调用 check()
+  const updateRef = useRef<Update | null>(null);
 
   // 格式化字节大小
   const formatBytes = (bytes: number): string => {
@@ -42,6 +44,7 @@ export default function UpdateChecker() {
       const update = await check();
 
       if (update?.available) {
+        updateRef.current = update;
         setUpdateAvailable(true);
         setUpdateInfo({
           version: update.version,
@@ -62,12 +65,13 @@ export default function UpdateChecker() {
   };
 
   const handleUpdate = async () => {
-    if (!updateInfo) return;
+    if (!updateInfo && !updateRef.current) return;
 
     setDownloading(true);
 
     try {
-      const update = await check();
+      // 优先使用缓存的 update，避免重复 check()
+      const update = updateRef.current ?? await check();
 
       if (update?.available) {
         toast.loading('正在下载更新...', {

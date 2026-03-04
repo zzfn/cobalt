@@ -157,7 +157,7 @@ export default function GeneralSettings() {
                     description: `版本 ${update.version} 可用`,
                     action: {
                       label: '立即更新',
-                      onClick: () => downloadAndInstall(),
+                      onClick: () => downloadAndInstall(update),
                     },
                     duration: 10000,
                   });

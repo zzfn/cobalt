@@ -1,5 +1,5 @@
-import { useState } from 'react';
-import { check } from '@tauri-apps/plugin-updater';
+import { useState, useRef } from 'react';
+import { check, type Update } from '@tauri-apps/plugin-updater';
 import { relaunch } from '@tauri-apps/plugin-process';
 import { toast } from 'sonner';
 
@@ -19,14 +19,18 @@ function getErrorMessage(error: unknown): string {
 export function useAppUpdate() {
   const [checkingUpdate, setCheckingUpdate] = useState(false);
   const [updating, setUpdating] = useState(false);
+  // 缓存 update 对象，避免 downloadAndInstall 重复调用 check()
+  const cachedUpdate = useRef<Update | null>(null);
 
   const checkForUpdate = async (currentVersion?: string) => {
     setCheckingUpdate(true);
     try {
       const update = await check();
       if (update?.available) {
+        cachedUpdate.current = update;
         return update;
       } else {
+        cachedUpdate.current = null;
         toast.success('已是最新版本', {
           description: currentVersion ? `当前版本 ${currentVersion}` : '当前已是最新版本',
           duration: 3000,
@@ -45,18 +49,19 @@ export function useAppUpdate() {
     }
   };
 
-  const downloadAndInstall = async () => {
+  const downloadAndInstall = async (update?: Update) => {
     setUpdating(true);
     try {
-      const update = await check();
-      if (!update?.available) {
+      // 优先使用传入的 update，其次使用缓存的，最后才重新 check()
+      const targetUpdate = update ?? cachedUpdate.current ?? await check();
+      if (!targetUpdate?.available) {
         toast.info('更新已不可用，请稍后重试');
         return;
       }
 
       toast.loading('正在下载更新...', { id: 'app-update' });
 
-      await update.downloadAndInstall((event) => {
+      await targetUpdate.downloadAndInstall((event) => {
         if (event.event === 'Finished') {
           toast.success('更新安装完成，应用将在 2 秒后重启...', {
             id: 'app-update',
