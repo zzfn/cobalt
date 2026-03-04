@@ -302,7 +302,7 @@ export default function SkillsList() {
             </div>
             <p className="text-muted-foreground">
               {skillsScope === 'global'
-                ? '管理全局 Claude Skills'
+                ? '管理全局已安装的 Skills'
                 : `管理 ${currentWorkspace?.name} 工作区的 Skills`}
             </p>
           </div>

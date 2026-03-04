@@ -1097,6 +1097,43 @@ pub fn list_installed_skills(workspace_path: Option<String>) -> Result<Vec<Skill
         }
     }
 
+    // 补充只安装在其他工具（非 claude-code）中的 skills
+    let already_listed: std::collections::HashSet<String> = skills.iter().map(|s| s.name.clone()).collect();
+    for (skill_name, tools) in &skill_to_tools {
+        // 跳过已经列出的
+        if already_listed.contains(skill_name) {
+            continue;
+        }
+        // 跳过只有 claude-code 的（说明目录不存在于 skills_dir，可能是异常状态）
+        if tools.iter().all(|t| t == "claude-code") {
+            continue;
+        }
+
+        // 从其他工具目录读取 metadata
+        let mut metadata: Option<SkillMetadata> = None;
+        for (tool_name, tool_dir) in &tool_dirs {
+            if tools.contains(&tool_name.to_string()) {
+                let metadata_path = tool_dir.join(skill_name).join("metadata.json");
+                if metadata_path.exists() {
+                    metadata = fs::read_to_string(&metadata_path)
+                        .ok()
+                        .and_then(|c| serde_json::from_str(&c).ok());
+                    break;
+                }
+            }
+        }
+
+        skills.push(SkillRegistryEntry {
+            id: skill_name.clone(),
+            name: skill_name.clone(),
+            description: metadata.as_ref().and_then(|m| m.description.clone()),
+            enabled: true, // 存在于其他工具目录即视为启用
+            installed_by: tools.clone(),
+            installed_at: None,
+            metadata,
+        });
+    }
+
     skills.sort_by(|a, b| a.name.cmp(&b.name));
     Ok(skills)
 }
