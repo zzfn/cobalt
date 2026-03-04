@@ -1,8 +1,30 @@
 // Skills 管理命令
 use serde::{Deserialize, Serialize};
 use std::fs;
+#[cfg(unix)]
+use std::os::unix::fs::PermissionsExt;
 use std::path::PathBuf;
 use std::process::Command;
+use std::time::{SystemTime, UNIX_EPOCH};
+
+const AUTH_REQUIRED_PREFIX: &str = "COBALT_AUTH_REQUIRED:";
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct GitAuthInput {
+    pub method: String, // "https" | "ssh"
+    pub username: Option<String>, // 仅 https 需要
+    pub secret: String, // PAT 或 SSH passphrase
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct GitAuthChallenge {
+    pub message: String,
+    pub suggested_method: String,
+    pub can_use_https: bool,
+    pub can_use_ssh: bool,
+}
 
 /// 将 HTTPS URL 转换为 SSH URL
 /// 例如: https://github.com/user/repo.git -> git@github.com:user/repo.git
@@ -36,11 +58,79 @@ fn https_to_ssh_url(url: &str) -> Option<String> {
     Some(format!("git@{}:{}.git", host, path))
 }
 
-/// 克隆仓库，优先使用 HTTPS，失败后尝试 SSH
-fn clone_repo(url: &str, target_dir: &str, shallow: bool) -> Result<(), String> {
-    println!("⏳ [Backend] 开始克隆仓库...");
+/// 创建 askpass 脚本，用于 GIT_ASKPASS 自动应答凭据
+/// 使用随机文件名防止路径可预测（TOCTOU 防护），支持 Unix / Windows
+fn create_askpass_script() -> Result<PathBuf, String> {
+    let random_id: u64 = {
+        use std::collections::hash_map::RandomState;
+        use std::hash::{BuildHasher, Hasher};
+        let s = RandomState::new();
+        let mut h = s.build_hasher();
+        h.write_u128(
+            SystemTime::now()
+                .duration_since(UNIX_EPOCH)
+                .unwrap_or_default()
+                .as_nanos(),
+        );
+        h.finish()
+    };
 
-    // 构建 git clone 参数
+    #[cfg(unix)]
+    let path = std::env::temp_dir().join(format!("cobalt-askpass-{}.sh", random_id));
+    #[cfg(windows)]
+    let path = std::env::temp_dir().join(format!("cobalt-askpass-{}.bat", random_id));
+
+    #[cfg(unix)]
+    let script = r#"#!/bin/sh
+prompt="$1"
+case "$prompt" in
+  *sername*) echo "$COBALT_GIT_USERNAME" ;;
+  *) echo "$COBALT_GIT_SECRET" ;;
+esac
+"#;
+    #[cfg(windows)]
+    let script = r#"@echo off
+set "prompt=%~1"
+echo %prompt% | findstr /i "sername" >nul && (
+    echo %COBALT_GIT_USERNAME%
+) || (
+    echo %COBALT_GIT_SECRET%
+)
+"#;
+
+    fs::write(&path, script).map_err(|e| format!("创建 askpass 脚本失败: {}", e))?;
+    #[cfg(unix)]
+    {
+        let perms = fs::Permissions::from_mode(0o700);
+        fs::set_permissions(&path, perms).map_err(|e| format!("设置 askpass 权限失败: {}", e))?;
+    }
+    Ok(path)
+}
+
+fn is_auth_related_error(stderr: &str) -> bool {
+    let s = stderr.to_lowercase();
+    s.contains("authentication failed")
+        || s.contains("could not read username")
+        || s.contains("terminal prompts disabled")
+        || s.contains("permission denied (publickey)")
+        || s.contains("passphrase")
+        || s.contains("permission denied")
+}
+
+fn build_auth_required_error(url: &str, stderr: &str) -> String {
+    let is_ssh_issue = stderr.to_lowercase().contains("publickey") || stderr.to_lowercase().contains("passphrase");
+    let challenge = GitAuthChallenge {
+        message: "仓库需要认证，请输入凭据后重试".to_string(),
+        suggested_method: if is_ssh_issue { "ssh".to_string() } else { "https".to_string() },
+        can_use_https: url.starts_with("http://") || url.starts_with("https://"),
+        can_use_ssh: url.starts_with("git@") || https_to_ssh_url(url).is_some(),
+    };
+
+    let payload = serde_json::to_string(&challenge).unwrap_or_else(|_| "{\"message\":\"仓库需要认证\"}".to_string());
+    format!("{}{}", AUTH_REQUIRED_PREFIX, payload)
+}
+
+fn run_git_clone(url: &str, target_dir: &str, shallow: bool, auth: Option<&GitAuthInput>) -> Result<std::process::Output, String> {
     let mut args = vec!["clone"];
     if shallow {
         args.push("--depth");
@@ -49,15 +139,63 @@ fn clone_repo(url: &str, target_dir: &str, shallow: bool) -> Result<(), String> 
     args.push(url);
     args.push(target_dir);
 
-    // 尝试 HTTPS 克隆
-    let output = Command::new("git")
-        .args(&args)
-        .env("GIT_TERMINAL_PROMPT", "0")
-        .output()
-        .map_err(|e| format!("执行 git clone 失败: {}", e))?;
+    let mut cmd = Command::new("git");
+    cmd.args(&args);
+
+    let mut askpass_path: Option<PathBuf> = None;
+    if let Some(auth_input) = auth {
+        let script_path = create_askpass_script()?;
+        cmd.env("GIT_TERMINAL_PROMPT", "0")
+            .env("GIT_ASKPASS", &script_path)
+            .env("SSH_ASKPASS", &script_path)
+            .env("SSH_ASKPASS_REQUIRE", "force")
+            .env("DISPLAY", "cobalt:0")
+            .env("COBALT_GIT_USERNAME", auth_input.username.clone().unwrap_or_else(|| "git".to_string()))
+            .env("COBALT_GIT_SECRET", &auth_input.secret);
+
+        if auth_input.method == "ssh" {
+            cmd.env("GIT_SSH_COMMAND", "ssh -oBatchMode=no");
+        }
+        askpass_path = Some(script_path);
+    } else {
+        cmd.env("GIT_TERMINAL_PROMPT", "0");
+    }
+
+    let output = cmd.output().map_err(|e| format!("执行 git clone 失败: {}", e));
+    if let Some(path) = askpass_path {
+        let _ = fs::remove_file(path);
+    }
+    output
+}
+
+fn clone_repo(url: &str, target_dir: &str, shallow: bool, auth: Option<&GitAuthInput>) -> Result<(), String> {
+    println!("⏳ [Backend] 开始克隆仓库...");
+
+    if let Some(auth_input) = auth {
+        let auth_url = if auth_input.method == "ssh" && !url.starts_with("git@") {
+            https_to_ssh_url(url).unwrap_or_else(|| url.to_string())
+        } else {
+            url.to_string()
+        };
+
+        let output = run_git_clone(&auth_url, target_dir, shallow, Some(auth_input))?;
+        if output.status.success() {
+            println!("✅ [Backend] 认证克隆成功");
+            return Ok(());
+        }
+
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        if is_auth_related_error(&stderr) {
+            return Err("认证失败，请检查凭据后重试".to_string());
+        }
+        return Err(parse_git_clone_error(&stderr));
+    }
+
+    // 尝试原始 URL 克隆
+    let output = run_git_clone(url, target_dir, shallow, None)?;
 
     if output.status.success() {
-        println!("✅ [Backend] HTTPS 克隆成功");
+        println!("✅ [Backend] 克隆成功");
         return Ok(());
     }
 
@@ -71,18 +209,7 @@ fn clone_repo(url: &str, target_dir: &str, shallow: bool) -> Result<(), String> 
         // 清理可能创建的空目录
         let _ = fs::remove_dir_all(target_dir);
 
-        let mut ssh_args = vec!["clone"];
-        if shallow {
-            ssh_args.push("--depth");
-            ssh_args.push("1");
-        }
-        ssh_args.push(&ssh_url);
-        ssh_args.push(target_dir);
-
-        let ssh_output = Command::new("git")
-            .args(&ssh_args)
-            .output()
-            .map_err(|e| format!("执行 git clone (SSH) 失败: {}", e))?;
+        let ssh_output = run_git_clone(&ssh_url, target_dir, shallow, None)?;
 
         if ssh_output.status.success() {
             println!("✅ [Backend] SSH 克隆成功");
@@ -92,7 +219,10 @@ fn clone_repo(url: &str, target_dir: &str, shallow: bool) -> Result<(), String> 
         let ssh_error = String::from_utf8_lossy(&ssh_output.stderr);
         println!("❌ [Backend] SSH 克隆也失败: {}", ssh_error.trim());
 
-        // 两种方式都失败，返回更详细的错误
+        if is_auth_related_error(&https_error) || is_auth_related_error(&ssh_error) {
+            return Err(build_auth_required_error(url, &format!("{}\n{}", https_error, ssh_error)));
+        }
+
         return Err(format!(
             "克隆失败:\n• HTTPS: {}\n• SSH: {}\n\n请检查仓库地址是否正确，或配置 SSH 密钥",
             https_error.trim(),
@@ -101,6 +231,9 @@ fn clone_repo(url: &str, target_dir: &str, shallow: bool) -> Result<(), String> 
     }
 
     // 无法转换为 SSH URL，返回 HTTPS 错误
+    if is_auth_related_error(&https_error) {
+        return Err(build_auth_required_error(url, &https_error));
+    }
     Err(parse_git_clone_error(&https_error))
 }
 
@@ -136,30 +269,31 @@ fn get_skills_dir() -> Result<PathBuf, String> {
     Ok(get_claude_dir()?.join("skills"))
 }
 
+/// 获取工具的相对路径配置
+/// 返回 Vec<(tool_name, path_segments)>
+pub fn get_tool_relative_paths() -> Vec<(&'static str, &'static [&'static str])> {
+    vec![
+        ("claude-code", &[".claude", "skills"] as &[&str]),
+        ("antigravity", &[".gemini", "antigravity", "global_skills"]),
+        ("opencode", &[".config", "opencode", "skills"]),
+        ("codex", &[".codex", "skills"]),
+        ("cursor", &[".cursor", "skills"]),
+        ("droid", &[".factory", "skills"]),
+    ]
+}
+
 /// 获取所有 AI Tools 的全局 skills 目录映射
-/// 返回 Vec<(tool_name, directory_path)>
-/// 目录定义参考 skill-manager 项目
 fn get_all_tool_skills_dirs() -> Vec<(&'static str, PathBuf)> {
     let mut dirs = Vec::new();
 
     if let Some(home) = dirs::home_dir() {
-        // Claude Code: ~/.claude/skills/
-        dirs.push(("claude-code", home.join(".claude").join("skills")));
-
-        // Antigravity: ~/.gemini/antigravity/global_skills/
-        dirs.push(("antigravity", home.join(".gemini").join("antigravity").join("global_skills")));
-
-        // OpenCode: ~/.config/opencode/skills/
-        dirs.push(("opencode", home.join(".config").join("opencode").join("skills")));
-
-        // Codex: ~/.codex/skills/
-        dirs.push(("codex", home.join(".codex").join("skills")));
-
-        // Cursor: ~/.cursor/skills/
-        dirs.push(("cursor", home.join(".cursor").join("skills")));
-
-        // Droid: ~/.factory/skills/
-        dirs.push(("droid", home.join(".factory").join("skills")));
+        for (tool_name, path_parts) in get_tool_relative_paths() {
+            let mut full_path = home.clone();
+            for part in path_parts {
+                full_path = full_path.join(part);
+            }
+            dirs.push((tool_name, full_path));
+        }
     }
 
     dirs
@@ -171,23 +305,13 @@ fn get_all_tool_skills_dirs() -> Vec<(&'static str, PathBuf)> {
 fn get_all_tool_workspace_skills_dirs(workspace_path: &PathBuf) -> Vec<(&'static str, PathBuf)> {
     let mut dirs = Vec::new();
 
-    // Claude Code: {workspace}/.claude/skills/
-    dirs.push(("claude-code", workspace_path.join(".claude").join("skills")));
-
-    // Antigravity: {workspace}/.gemini/antigravity/global_skills/
-    dirs.push(("antigravity", workspace_path.join(".gemini").join("antigravity").join("global_skills")));
-
-    // OpenCode: {workspace}/.config/opencode/skills/
-    dirs.push(("opencode", workspace_path.join(".config").join("opencode").join("skills")));
-
-    // Codex: {workspace}/.codex/skills/
-    dirs.push(("codex", workspace_path.join(".codex").join("skills")));
-
-    // Cursor: {workspace}/.cursor/skills/
-    dirs.push(("cursor", workspace_path.join(".cursor").join("skills")));
-
-    // Droid: {workspace}/.factory/skills/
-    dirs.push(("droid", workspace_path.join(".factory").join("skills")));
+    for (tool_name, path_parts) in get_tool_relative_paths() {
+        let mut full_path = workspace_path.clone();
+        for part in path_parts {
+            full_path = full_path.join(part);
+        }
+        dirs.push((tool_name, full_path));
+    }
 
     dirs
 }
@@ -230,6 +354,66 @@ fn get_target_tool_workspace_dirs(tool_names: &Vec<String>, workspace_path: &Pat
     }
 
     Ok(target_dirs)
+}
+
+/// AI 工具信息
+#[derive(Debug, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AiToolInfo {
+    pub id: String,
+    pub name: String,
+    pub display_name: String,
+    pub icon: String,
+    pub relative_path: String,  // 相对路径，如 ".claude/skills/"
+}
+
+/// 获取所有支持的 AI 工具信息
+#[tauri::command]
+pub fn get_supported_ai_tools() -> Vec<AiToolInfo> {
+    vec![
+        AiToolInfo {
+            id: "claude-code".to_string(),
+            name: "claude-code".to_string(),
+            display_name: "Claude Code".to_string(),
+            icon: "🤖".to_string(),
+            relative_path: ".claude/skills/".to_string(),
+        },
+        AiToolInfo {
+            id: "cursor".to_string(),
+            name: "cursor".to_string(),
+            display_name: "Cursor".to_string(),
+            icon: "⚡".to_string(),
+            relative_path: ".cursor/skills/".to_string(),
+        },
+        AiToolInfo {
+            id: "codex".to_string(),
+            name: "codex".to_string(),
+            display_name: "Codex".to_string(),
+            icon: "🔮".to_string(),
+            relative_path: ".codex/skills/".to_string(),
+        },
+        AiToolInfo {
+            id: "opencode".to_string(),
+            name: "opencode".to_string(),
+            display_name: "OpenCode".to_string(),
+            icon: "🌟".to_string(),
+            relative_path: ".config/opencode/skills/".to_string(),
+        },
+        AiToolInfo {
+            id: "antigravity".to_string(),
+            name: "antigravity".to_string(),
+            display_name: "Antigravity".to_string(),
+            icon: "🚀".to_string(),
+            relative_path: ".gemini/antigravity/global_skills/".to_string(),
+        },
+        AiToolInfo {
+            id: "droid".to_string(),
+            name: "droid".to_string(),
+            display_name: "Droid".to_string(),
+            icon: "🦾".to_string(),
+            relative_path: ".factory/skills/".to_string(),
+        },
+    ]
 }
 
 /// 扫描指定目录获取所有 skill 名称
@@ -350,17 +534,28 @@ pub struct SkillDetail {
 
 /// 读取 Skill 的 SKILL.md 内容
 #[tauri::command]
-pub fn read_skill_md(skill_name: String) -> Result<SkillDetail, String> {
-    let skills_dir = get_skills_dir()?;
-    let disabled_skills_dir = get_claude_dir()?.join(".disabled_skills");
+pub fn read_skill_md(skill_name: String, workspace_path: Option<String>) -> Result<SkillDetail, String> {
+    let (skills_dir, disabled_skills_dir) = if let Some(ref ws_path) = workspace_path {
+        let ws_path_buf = PathBuf::from(ws_path);
+        (
+            ws_path_buf.join(".claude").join("skills"),
+            ws_path_buf.join(".claude").join(".disabled_skills")
+        )
+    } else {
+        (
+            get_skills_dir()?,
+            get_claude_dir()?.join(".disabled_skills")
+        )
+    };
 
     // 尝试从两个目录中查找
     let enabled_path = skills_dir.join(&skill_name);
     let disabled_path = disabled_skills_dir.join(&skill_name);
+    let disabled_exists = disabled_path.exists();
 
     let (skill_dir, enabled) = if enabled_path.exists() {
         (enabled_path, true)
-    } else if disabled_path.exists() {
+    } else if disabled_exists {
         (disabled_path, false)
     } else {
         return Err(format!("Skill '{}' 不存在", skill_name));
@@ -388,16 +583,39 @@ pub fn read_skill_md(skill_name: String) -> Result<SkillDetail, String> {
     // 列出文件
     let files = list_skill_files_internal(&skill_dir)?;
 
-    // 从注册表获取 installed_by
-    let registry = read_skill_registry()?;
-    let entry = registry.skills.iter().find(|s| s.name == skill_name);
+    // 计算 installed_by
+    let (id, installed_by) = if workspace_path.is_none() {
+        let registry = read_skill_registry()?;
+        let entry = registry.skills.iter().find(|s| s.name == skill_name);
+        (
+            entry.map(|e| e.id.clone()).unwrap_or_else(|| skill_name.clone()),
+            entry.map(|e| e.installed_by.clone()).unwrap_or_else(Vec::new)
+        )
+    } else {
+        // 工作区模式：根据各工具目录实际存在情况动态计算
+        let ws_path_buf = PathBuf::from(workspace_path.as_ref().ok_or_else(|| "工作区路径缺失".to_string())?);
+        let mut installed = Vec::new();
+
+        for (tool_name, tool_dir) in get_all_tool_workspace_skills_dirs(&ws_path_buf) {
+            if tool_dir.join(&skill_name).exists() {
+                installed.push(tool_name.to_string());
+            }
+        }
+
+        // claude-code 还可能处于 .disabled_skills 目录
+        if disabled_exists && !installed.iter().any(|t| t == "claude-code") {
+            installed.push("claude-code".to_string());
+        }
+
+        (skill_name.clone(), installed)
+    };
 
     Ok(SkillDetail {
-        id: entry.map(|e| e.id.clone()).unwrap_or_else(|| skill_name.clone()),
+        id,
         name: skill_name,
         description: metadata.as_ref().and_then(|m| m.description.clone()),
         enabled,  // 根据文件位置判断状态
-        installed_by: entry.map(|e| e.installed_by.clone()).unwrap_or_else(Vec::new),
+        installed_by,
         content,
         metadata,
         files,
@@ -471,9 +689,19 @@ pub fn list_skill_files(skill_name: String) -> Result<Vec<String>, String> {
 
 /// 读取 Skill 中的指定文件内容
 #[tauri::command]
-pub fn read_skill_file(skill_name: String, file_path: String) -> Result<String, String> {
-    let skills_dir = get_skills_dir()?;
-    let disabled_skills_dir = get_claude_dir()?.join(".disabled_skills");
+pub fn read_skill_file(skill_name: String, file_path: String, workspace_path: Option<String>) -> Result<String, String> {
+    let (skills_dir, disabled_skills_dir) = if let Some(ref ws_path) = workspace_path {
+        let ws_path_buf = PathBuf::from(ws_path);
+        (
+            ws_path_buf.join(".claude").join("skills"),
+            ws_path_buf.join(".claude").join(".disabled_skills")
+        )
+    } else {
+        (
+            get_skills_dir()?,
+            get_claude_dir()?.join(".disabled_skills")
+        )
+    };
 
     // 尝试从两个目录中查找
     let enabled_path = skills_dir.join(&skill_name);
@@ -507,9 +735,19 @@ pub fn read_skill_file(skill_name: String, file_path: String) -> Result<String, 
 
 /// 启用/禁用 Skill（通过移动文件实现）
 #[tauri::command]
-pub fn toggle_skill(skill_name: String, enabled: bool) -> Result<(), String> {
-    let skills_dir = get_skills_dir()?;
-    let disabled_skills_dir = get_claude_dir()?.join(".disabled_skills");
+pub fn toggle_skill(skill_name: String, enabled: bool, workspace_path: Option<String>) -> Result<(), String> {
+    let (skills_dir, disabled_skills_dir) = if let Some(ref ws_path) = workspace_path {
+        let ws_path_buf = PathBuf::from(ws_path);
+        (
+            ws_path_buf.join(".claude").join("skills"),
+            ws_path_buf.join(".claude").join(".disabled_skills")
+        )
+    } else {
+        (
+            get_skills_dir()?,
+            get_claude_dir()?.join(".disabled_skills")
+        )
+    };
 
     // 确保禁用目录存在
     fs::create_dir_all(&disabled_skills_dir)
@@ -555,13 +793,20 @@ pub fn toggle_skill(skill_name: String, enabled: bool) -> Result<(), String> {
 
 /// 完全卸载 Skill（从所有 AI 工具中删除）
 #[tauri::command]
-pub fn uninstall_skill(skill_name: String) -> Result<(), String> {
+pub fn uninstall_skill(skill_name: String, workspace_path: Option<String>) -> Result<(), String> {
     println!("🗑️  [Backend] 完全卸载 Skill: {}", skill_name);
 
     let mut deleted_from_tools = Vec::new();
 
+    // 根据工作区路径决定使用哪些工具目录
+    let all_tool_dirs = if let Some(ref ws_path) = workspace_path {
+        let ws_path_buf = PathBuf::from(ws_path);
+        get_all_tool_workspace_skills_dirs(&ws_path_buf)
+    } else {
+        get_all_tool_skills_dirs()
+    };
+
     // 从所有工具目录中删除
-    let all_tool_dirs = get_all_tool_skills_dirs();
     for (tool_name, tool_dir) in &all_tool_dirs {
         let skill_path = tool_dir.join(&skill_name);
         if skill_path.exists() {
@@ -578,7 +823,11 @@ pub fn uninstall_skill(skill_name: String) -> Result<(), String> {
     }
 
     // 也检查 disabled_skills 目录
-    let disabled_skills_dir = get_claude_dir()?.join(".disabled_skills");
+    let disabled_skills_dir = if let Some(ref ws_path) = workspace_path {
+        PathBuf::from(ws_path).join(".claude").join(".disabled_skills")
+    } else {
+        get_claude_dir()?.join(".disabled_skills")
+    };
     let disabled_path = disabled_skills_dir.join(&skill_name);
     if disabled_path.exists() {
         fs::remove_dir_all(&disabled_path)
@@ -590,10 +839,12 @@ pub fn uninstall_skill(skill_name: String) -> Result<(), String> {
         return Err(format!("Skill '{}' 不存在于任何工具中", skill_name));
     }
 
-    // 从注册表中移除
-    let mut registry = read_skill_registry()?;
-    registry.skills.retain(|s| s.name != skill_name);
-    write_skill_registry(registry)?;
+    // 只在全局模式下从注册表中移除
+    if workspace_path.is_none() {
+        let mut registry = read_skill_registry()?;
+        registry.skills.retain(|s| s.name != skill_name);
+        write_skill_registry(registry)?;
+    }
 
     println!("🎉 [Backend] Skill '{}' 已从 {} 个位置删除", skill_name, deleted_from_tools.len());
     Ok(())
@@ -604,6 +855,7 @@ pub fn uninstall_skill(skill_name: String) -> Result<(), String> {
 pub fn remove_skill_from_tools(
     skill_name: String,
     tools: Vec<String>,
+    workspace_path: Option<String>,
 ) -> Result<String, String> {
     println!("🗑️  [Backend] 从指定工具中移除 Skill");
     println!("📦 [Backend] Skill: {}", skill_name);
@@ -613,7 +865,12 @@ pub fn remove_skill_from_tools(
     let mut not_found_tools = Vec::new();
 
     // 获取所有工具目录
-    let all_tool_dirs = get_all_tool_skills_dirs();
+    let all_tool_dirs = if let Some(ref ws_path) = workspace_path {
+        let ws_path_buf = PathBuf::from(ws_path);
+        get_all_tool_workspace_skills_dirs(&ws_path_buf)
+    } else {
+        get_all_tool_skills_dirs()
+    };
 
     for tool_name in &tools {
         // 找到对应的工具目录
@@ -641,23 +898,25 @@ pub fn remove_skill_from_tools(
         return Err(format!("Skill '{}' 在指定的工具中都不存在", skill_name));
     }
 
-    // 更新注册表
-    let mut registry = read_skill_registry()
-        .map_err(|e| format!("读取注册表失败: {}", e))?;
+    // 只在全局模式下更新注册表
+    if workspace_path.is_none() {
+        let mut registry = read_skill_registry()
+            .map_err(|e| format!("读取注册表失败: {}", e))?;
 
-    if let Some(entry) = registry.skills.iter_mut().find(|s| s.name == skill_name) {
-        // 从 installedBy 中移除这些工具
-        entry.installed_by.retain(|tool| !removed_tools.contains(tool));
+        if let Some(entry) = registry.skills.iter_mut().find(|s| s.name == skill_name) {
+            // 从 installedBy 中移除这些工具
+            entry.installed_by.retain(|tool| !removed_tools.contains(tool));
 
-        // 如果没有工具安装了这个 skill，从注册表中完全移除
-        if entry.installed_by.is_empty() {
-            registry.skills.retain(|s| s.name != skill_name);
-            println!("📝 [Backend] Skill '{}' 已从所有工具中移除，从注册表中删除", skill_name);
+            // 如果没有工具安装了这个 skill，从注册表中完全移除
+            if entry.installed_by.is_empty() {
+                registry.skills.retain(|s| s.name != skill_name);
+                println!("📝 [Backend] Skill '{}' 已从所有工具中移除，从注册表中删除", skill_name);
+            }
         }
-    }
 
-    write_skill_registry(registry)
-        .map_err(|e| format!("写入注册表失败: {}", e))?;
+        write_skill_registry(registry)
+            .map_err(|e| format!("写入注册表失败: {}", e))?;
+    }
 
     let message = if not_found_tools.is_empty() {
         format!("成功从 {} 个工具中移除", removed_tools.len())
@@ -853,7 +1112,7 @@ pub struct ScannedSkillInfo {
 }
 
 #[tauri::command]
-pub async fn scan_repo_skills(repo_url: String) -> Result<Vec<ScannedSkillInfo>, String> {
+pub async fn scan_repo_skills(repo_url: String, git_auth: Option<GitAuthInput>) -> Result<Vec<ScannedSkillInfo>, String> {
     println!("🔍 [Backend] 开始扫描仓库中的 Skills");
     println!("📦 [Backend] 仓库 URL: {}", repo_url);
 
@@ -872,7 +1131,7 @@ pub async fn scan_repo_skills(repo_url: String) -> Result<Vec<ScannedSkillInfo>,
     }
 
     // 克隆仓库（浅克隆，HTTPS 失败会自动尝试 SSH）
-    clone_repo(&repo_url, temp_dir.to_str().unwrap(), true)?;
+    clone_repo(&repo_url, temp_dir.to_str().unwrap(), true, git_auth.as_ref())?;
 
     // 检查是否有 skills 子目录
     let skills_subdir = temp_dir.join("skills");
@@ -976,6 +1235,7 @@ pub async fn install_skill_from_repo(
     skill_names: Option<Vec<String>>,
     target_tools: Option<Vec<String>>,
     workspace_path: Option<String>,
+    git_auth: Option<GitAuthInput>,
 ) -> Result<String, String> {
 
     println!("🔧 [Backend] 开始安装 Skill");
@@ -1042,7 +1302,7 @@ pub async fn install_skill_from_repo(
     println!("📂 [Backend] 临时目录: {:?}", temp_dir);
 
     // 克隆仓库（完整克隆，HTTPS 失败会自动尝试 SSH）
-    clone_repo(&repo_url, temp_dir.to_str().unwrap(), false)?;
+    clone_repo(&repo_url, temp_dir.to_str().unwrap(), false, git_auth.as_ref())?;
 
     // 检查是否有 skills 子目录
     let skills_subdir = temp_dir.join("skills");
@@ -1690,12 +1950,22 @@ pub struct SkillUpdateCheckResult {
 
 /// 检查 Skill 是否有更新（基于文件 hash 对比）
 #[tauri::command]
-pub async fn check_skill_update(skill_name: String) -> Result<SkillUpdateCheckResult, String> {
+pub async fn check_skill_update(skill_name: String, workspace_path: Option<String>) -> Result<SkillUpdateCheckResult, String> {
     println!("🔍 [Backend] 检查 Skill '{}' 的更新", skill_name);
 
     // 获取 skill 目录
-    let skills_dir = get_skills_dir()?;
-    let disabled_skills_dir = get_claude_dir()?.join(".disabled_skills");
+    let (skills_dir, disabled_skills_dir) = if let Some(ref ws_path) = workspace_path {
+        let ws_path_buf = PathBuf::from(ws_path);
+        (
+            ws_path_buf.join(".claude").join("skills"),
+            ws_path_buf.join(".claude").join(".disabled_skills")
+        )
+    } else {
+        (
+            get_skills_dir()?,
+            get_claude_dir()?.join(".disabled_skills")
+        )
+    };
     let skill_dir = if skills_dir.join(&skill_name).exists() {
         skills_dir.join(&skill_name)
     } else if disabled_skills_dir.join(&skill_name).exists() {
@@ -1704,13 +1974,20 @@ pub async fn check_skill_update(skill_name: String) -> Result<SkillUpdateCheckRe
         return Err(format!("Skill '{}' 不存在", skill_name));
     };
 
-    // 读取注册表获取 skill 信息
-    let registry = read_skill_registry()?;
-    let entry = registry
-        .skills
-        .iter()
-        .find(|s| s.name == skill_name)
-        .cloned();
+    // 工作区模式不使用全局注册表
+    let entry = if workspace_path.is_none() {
+        let registry = read_skill_registry()?;
+        registry
+            .skills
+            .iter()
+            .find(|s| s.name == skill_name)
+            .cloned()
+    } else {
+        None
+    };
+
+    // 读取本地清单文件
+    let local_manifest = read_skill_manifest(&skill_dir);
 
     // 获取 repository URL - 优先从注册表，然后尝试读取 .manifest.json，最后尝试 SKILL.md
     let repo_url = entry
@@ -1737,7 +2014,8 @@ pub async fn check_skill_update(skill_name: String) -> Result<SkillUpdateCheckRe
     let current_version = entry
         .as_ref()
         .and_then(|e| e.metadata.as_ref())
-        .and_then(|m| m.version.clone());
+        .and_then(|m| m.version.clone())
+        .or_else(|| local_manifest.as_ref().map(|m| m.version.clone()));
 
     // 如果没有仓库信息，返回提示
     let repo_url = match repo_url {
@@ -1757,9 +2035,6 @@ pub async fn check_skill_update(skill_name: String) -> Result<SkillUpdateCheckRe
         }
     };
 
-    // 读取本地清单文件
-    let local_manifest = read_skill_manifest(&skill_dir);
-
     // 创建临时目录用于克隆远程仓库
     let temp_dir = std::env::temp_dir().join(format!("cobalt-skill-check-{}", skill_name));
     if temp_dir.exists() {
@@ -1768,7 +2043,7 @@ pub async fn check_skill_update(skill_name: String) -> Result<SkillUpdateCheckRe
 
     // 克隆仓库（浅克隆，HTTPS 失败会自动尝试 SSH）
     println!("📡 [Backend] 克隆远程仓库: {}", repo_url);
-    if let Err(e) = clone_repo(&repo_url, temp_dir.to_str().unwrap(), true) {
+    if let Err(e) = clone_repo(&repo_url, temp_dir.to_str().unwrap(), true, None) {
         return Ok(SkillUpdateCheckResult {
             has_update: false,
             current_version,
@@ -1926,11 +2201,21 @@ fn compare_manifests(
 
 /// 更新 Skill 到最新版本
 #[tauri::command]
-pub async fn update_skill(skill_name: String) -> Result<String, String> {
+pub async fn update_skill(skill_name: String, workspace_path: Option<String>) -> Result<String, String> {
     println!("🔄 [Backend] 开始更新 Skill '{}'", skill_name);
 
-    let skills_dir = get_skills_dir()?;
-    let disabled_skills_dir = get_claude_dir()?.join(".disabled_skills");
+    let (skills_dir, disabled_skills_dir) = if let Some(ref ws_path) = workspace_path {
+        let ws_path_buf = PathBuf::from(ws_path);
+        (
+            ws_path_buf.join(".claude").join("skills"),
+            ws_path_buf.join(".claude").join(".disabled_skills")
+        )
+    } else {
+        (
+            get_skills_dir()?,
+            get_claude_dir()?.join(".disabled_skills")
+        )
+    };
 
     // 确定 skill 当前位置
     let is_enabled = skills_dir.join(&skill_name).exists();
@@ -1944,19 +2229,25 @@ pub async fn update_skill(skill_name: String) -> Result<String, String> {
         return Err(format!("Skill '{}' 目录不存在", skill_name));
     }
 
-    // 读取注册表
-    let mut registry = read_skill_registry()?;
-    let entry = registry
-        .skills
-        .iter()
-        .find(|s| s.name == skill_name)
-        .cloned();
+    // 只在全局模式下读取注册表
+    let (_entry, repo_url_from_registry) = if workspace_path.is_none() {
+        let registry = read_skill_registry()?;
+        let entry = registry
+            .skills
+            .iter()
+            .find(|s| s.name == skill_name)
+            .cloned();
+        let repo_from_registry = entry
+            .as_ref()
+            .and_then(|e| e.metadata.as_ref())
+            .and_then(|m| m.repository.clone());
+        (entry, repo_from_registry)
+    } else {
+        (None, None)
+    };
 
     // 获取 repository URL - 优先从注册表，然后从 .manifest.json，最后从 SKILL.md
-    let repo_url = entry
-        .as_ref()
-        .and_then(|e| e.metadata.as_ref())
-        .and_then(|m| m.repository.clone())
+    let repo_url = repo_url_from_registry
         .or_else(|| {
             // 尝试从 .manifest.json 读取
             read_skill_manifest(&skill_dir).and_then(|m| m.repository)
@@ -1992,7 +2283,7 @@ pub async fn update_skill(skill_name: String) -> Result<String, String> {
     }
 
     // 克隆仓库（完整克隆，HTTPS 失败会自动尝试 SSH）
-    if let Err(e) = clone_repo(&repo_url, temp_dir.to_str().unwrap(), false) {
+    if let Err(e) = clone_repo(&repo_url, temp_dir.to_str().unwrap(), false, None) {
         let _ = fs::remove_dir_all(&backup_dir);
         return Err(e);
     }
@@ -2051,36 +2342,38 @@ pub async fn update_skill(skill_name: String) -> Result<String, String> {
     let new_manifest = generate_skill_manifest(&skill_dir, Some(&repo_url))?;
     write_skill_manifest(&skill_dir, &new_manifest)?;
 
-    // 更新注册表中的版本信息
-    if let Some(entry) = registry.skills.iter_mut().find(|s| s.name == skill_name) {
-        // 更新已有条目
-        if let Some(ref mut meta) = entry.metadata {
-            meta.version = Some(new_manifest.version.clone());
-            meta.repository = Some(repo_url.clone());
-        }
-    } else {
-        // 添加新条目
-        let now = chrono::Utc::now().to_rfc3339();
-        registry.skills.push(SkillRegistryEntry {
-            id: skill_name.clone(),
-            name: skill_name.clone(),
-            description: new_manifest.description.clone(),
-            enabled: is_enabled,
-            installed_by: vec!["claude-code".to_string()],
-            installed_at: Some(now),
-            metadata: Some(SkillMetadata {
+    // 只在全局模式下更新注册表
+    if workspace_path.is_none() {
+        let mut registry = read_skill_registry()?;
+        if let Some(entry) = registry.skills.iter_mut().find(|s| s.name == skill_name) {
+            // 更新已有条目
+            if let Some(ref mut meta) = entry.metadata {
+                meta.version = Some(new_manifest.version.clone());
+                meta.repository = Some(repo_url.clone());
+            }
+        } else {
+            // 添加新条目
+            let now = chrono::Utc::now().to_rfc3339();
+            registry.skills.push(SkillRegistryEntry {
+                id: skill_name.clone(),
                 name: skill_name.clone(),
-                version: Some(new_manifest.version.clone()),
                 description: new_manifest.description.clone(),
-                tags: Vec::new(),
-                target_tools: Vec::new(),
-                repository: Some(repo_url.clone()),
-                source_id: None,
-            }),
-        });
+                enabled: is_enabled,
+                installed_by: vec!["claude-code".to_string()],
+                installed_at: Some(now),
+                metadata: Some(SkillMetadata {
+                    name: skill_name.clone(),
+                    version: Some(new_manifest.version.clone()),
+                    description: new_manifest.description.clone(),
+                    tags: Vec::new(),
+                    target_tools: Vec::new(),
+                    repository: Some(repo_url.clone()),
+                    source_id: None,
+                }),
+            });
+        }
+        write_skill_registry(registry)?;
     }
-
-    write_skill_registry(registry)?;
 
     // 清理临时文件
     if temp_dir.exists() {
@@ -2096,11 +2389,21 @@ pub async fn update_skill(skill_name: String) -> Result<String, String> {
 
 /// 设置 Skill 的仓库地址
 #[tauri::command]
-pub fn set_skill_repository(skill_name: String, repository: String) -> Result<(), String> {
+pub fn set_skill_repository(skill_name: String, repository: String, workspace_path: Option<String>) -> Result<(), String> {
     println!("📝 [Backend] 设置 Skill '{}' 的仓库地址: {}", skill_name, repository);
 
-    let skills_dir = get_skills_dir()?;
-    let disabled_skills_dir = get_claude_dir()?.join(".disabled_skills");
+    let (skills_dir, disabled_skills_dir) = if let Some(ref ws_path) = workspace_path {
+        let ws_path_buf = PathBuf::from(ws_path);
+        (
+            ws_path_buf.join(".claude").join("skills"),
+            ws_path_buf.join(".claude").join(".disabled_skills")
+        )
+    } else {
+        (
+            get_skills_dir()?,
+            get_claude_dir()?.join(".disabled_skills")
+        )
+    };
 
     // 确定 skill 目录
     let skill_dir = if skills_dir.join(&skill_name).exists() {
@@ -2123,45 +2426,47 @@ pub fn set_skill_repository(skill_name: String, repository: String) -> Result<()
     // 写入清单文件
     write_skill_manifest(&skill_dir, &manifest)?;
 
-    // 同时更新注册表
-    let mut registry = read_skill_registry()?;
-    if let Some(entry) = registry.skills.iter_mut().find(|s| s.name == skill_name) {
-        // 更新已有条目
-        if let Some(ref mut meta) = entry.metadata {
-            meta.repository = Some(repository.clone());
+    // 只在全局模式下更新注册表
+    if workspace_path.is_none() {
+        let mut registry = read_skill_registry()?;
+        if let Some(entry) = registry.skills.iter_mut().find(|s| s.name == skill_name) {
+            // 更新已有条目
+            if let Some(ref mut meta) = entry.metadata {
+                meta.repository = Some(repository.clone());
+            } else {
+                entry.metadata = Some(SkillMetadata {
+                    name: skill_name.clone(),
+                    version: Some(manifest.version.clone()),
+                    description: manifest.description.clone(),
+                    tags: Vec::new(),
+                    target_tools: Vec::new(),
+                    repository: Some(repository.clone()),
+                    source_id: None,
+                });
+            }
         } else {
-            entry.metadata = Some(SkillMetadata {
+            // 添加新条目
+            let now = chrono::Utc::now().to_rfc3339();
+            registry.skills.push(SkillRegistryEntry {
+                id: skill_name.clone(),
                 name: skill_name.clone(),
-                version: Some(manifest.version.clone()),
                 description: manifest.description.clone(),
-                tags: Vec::new(),
-                target_tools: Vec::new(),
-                repository: Some(repository.clone()),
-                source_id: None,
+                enabled: skills_dir.join(&skill_name).exists(),
+                installed_by: vec!["claude-code".to_string()],
+                installed_at: Some(now),
+                metadata: Some(SkillMetadata {
+                    name: skill_name.clone(),
+                    version: Some(manifest.version.clone()),
+                    description: manifest.description.clone(),
+                    tags: Vec::new(),
+                    target_tools: Vec::new(),
+                    repository: Some(repository.clone()),
+                    source_id: None,
+                }),
             });
         }
-    } else {
-        // 添加新条目
-        let now = chrono::Utc::now().to_rfc3339();
-        registry.skills.push(SkillRegistryEntry {
-            id: skill_name.clone(),
-            name: skill_name.clone(),
-            description: manifest.description.clone(),
-            enabled: skills_dir.join(&skill_name).exists(),
-            installed_by: vec!["claude-code".to_string()],
-            installed_at: Some(now),
-            metadata: Some(SkillMetadata {
-                name: skill_name.clone(),
-                version: Some(manifest.version.clone()),
-                description: manifest.description.clone(),
-                tags: Vec::new(),
-                target_tools: Vec::new(),
-                repository: Some(repository.clone()),
-                source_id: None,
-            }),
-        });
+        write_skill_registry(registry)?;
     }
-    write_skill_registry(registry)?;
 
     println!("✅ [Backend] 仓库地址设置成功");
     Ok(())
@@ -2172,14 +2477,25 @@ pub fn set_skill_repository(skill_name: String, repository: String) -> Result<()
 pub fn apply_skill_to_tools(
     skill_name: String,
     target_tools: Vec<String>,
+    workspace_path: Option<String>,
 ) -> Result<String, String> {
     println!("🔧 [Backend] 开始应用 Skill 到其他工具");
     println!("📦 [Backend] Skill: {}", skill_name);
     println!("🎯 [Backend] 目标工具: {:?}", target_tools);
 
     // 获取源 Skill 目录（从 claude-code 或 disabled_skills）
-    let skills_dir = get_skills_dir()?;
-    let disabled_skills_dir = get_claude_dir()?.join(".disabled_skills");
+    let (skills_dir, disabled_skills_dir) = if let Some(ref ws_path) = workspace_path {
+        let ws_path_buf = PathBuf::from(ws_path);
+        (
+            ws_path_buf.join(".claude").join("skills"),
+            ws_path_buf.join(".claude").join(".disabled_skills")
+        )
+    } else {
+        (
+            get_skills_dir()?,
+            get_claude_dir()?.join(".disabled_skills")
+        )
+    };
 
     let source_dir = if skills_dir.join(&skill_name).exists() {
         skills_dir.join(&skill_name)
@@ -2190,7 +2506,12 @@ pub fn apply_skill_to_tools(
     };
 
     // 获取目标工具的目录列表
-    let target_dirs = get_target_tool_dirs(&target_tools)?;
+    let target_dirs = if let Some(ref ws_path) = workspace_path {
+        let ws_path_buf = PathBuf::from(ws_path);
+        get_target_tool_workspace_dirs(&target_tools, &ws_path_buf)?
+    } else {
+        get_target_tool_dirs(&target_tools)?
+    };
 
     let mut installed_tools = Vec::new();
     let mut skipped_tools = Vec::new();
@@ -2231,21 +2552,23 @@ pub fn apply_skill_to_tools(
         }
     }
 
-    // 更新注册表
-    let mut registry = read_skill_registry()
-        .map_err(|e| format!("读取注册表失败: {}", e))?;
+    // 只在全局模式下更新注册表
+    if workspace_path.is_none() {
+        let mut registry = read_skill_registry()
+            .map_err(|e| format!("读取注册表失败: {}", e))?;
 
-    if let Some(entry) = registry.skills.iter_mut().find(|s| s.name == skill_name) {
-        // 更新安装工具列表
-        for tool_name in &installed_tools {
-            if !entry.installed_by.contains(tool_name) {
-                entry.installed_by.push(tool_name.clone());
+        if let Some(entry) = registry.skills.iter_mut().find(|s| s.name == skill_name) {
+            // 更新安装工具列表
+            for tool_name in &installed_tools {
+                if !entry.installed_by.contains(tool_name) {
+                    entry.installed_by.push(tool_name.clone());
+                }
             }
         }
-    }
 
-    write_skill_registry(registry)
-        .map_err(|e| format!("写入注册表失败: {}", e))?;
+        write_skill_registry(registry)
+            .map_err(|e| format!("写入注册表失败: {}", e))?;
+    }
 
     let message = if skipped_tools.is_empty() {
         format!("成功应用到 {} 个工具: {}", installed_tools.len(), installed_tools.join(", "))

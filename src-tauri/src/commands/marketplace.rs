@@ -23,6 +23,32 @@ fn get_skills_dir() -> Result<PathBuf, String> {
     Ok(get_claude_dir()?.join("skills"))
 }
 
+fn get_workspace_tool_skill_dirs(workspace_path: &str) -> Vec<PathBuf> {
+    let ws_root = PathBuf::from(workspace_path);
+    let mut dirs = Vec::new();
+    for (_, parts) in super::skills::get_tool_relative_paths() {
+        let mut path = ws_root.clone();
+        for part in parts {
+            path = path.join(part);
+        }
+        dirs.push(path);
+    }
+    dirs
+}
+
+fn get_global_tool_skill_dirs() -> Result<Vec<PathBuf>, String> {
+    let home = dirs::home_dir().ok_or_else(|| "无法获取用户主目录".to_string())?;
+    let mut dirs = Vec::new();
+    for (_, parts) in super::skills::get_tool_relative_paths() {
+        let mut path = home.clone();
+        for part in parts {
+            path = path.join(part);
+        }
+        dirs.push(path);
+    }
+    Ok(dirs)
+}
+
 /// 获取市场配置文件路径
 fn get_marketplace_config_path() -> Result<PathBuf, String> {
     Ok(get_cobalt_dir()?.join("marketplace.json"))
@@ -591,8 +617,60 @@ pub async fn refresh_all_marketplace() -> Result<Vec<MarketplaceCache>, String> 
 
 /// 获取市场源的 Skills（从缓存）
 #[tauri::command]
-pub fn get_marketplace_skills(source_id: String) -> Result<MarketplaceCache, String> {
-    read_marketplace_cache(&source_id)
+pub fn get_marketplace_skills(source_id: String, workspace_path: Option<String>) -> Result<MarketplaceCache, String> {
+    let mut cache = read_marketplace_cache(&source_id)?;
+
+    // 根据工作区路径检查每个 skill 在所有支持工具中的安装状态
+    let tool_skill_dirs = if let Some(ref ws_path) = workspace_path {
+        get_workspace_tool_skill_dirs(ws_path)
+    } else {
+        get_global_tool_skill_dirs()?
+    };
+
+    let disabled_skills_dir = if let Some(ref ws_path) = workspace_path {
+        PathBuf::from(ws_path).join(".claude").join(".disabled_skills")
+    } else {
+        dirs::home_dir()
+            .map(|home| home.join(".claude").join(".disabled_skills"))
+            .ok_or_else(|| "无法获取用户主目录".to_string())?
+    };
+
+    // 更新每个 skill 的安装状态
+    for skill in &mut cache.skills {
+        let mut installed_path = tool_skill_dirs
+            .iter()
+            .map(|dir| dir.join(&skill.name))
+            .find(|path| path.exists());
+
+        if installed_path.is_none() {
+            let disabled_path = disabled_skills_dir.join(&skill.name);
+            if disabled_path.exists() {
+                installed_path = Some(disabled_path);
+            }
+        }
+
+        let is_installed = installed_path.is_some();
+        skill.installed = is_installed;
+
+        // 如果已安装，尝试获取已安装的版本
+        if let Some(skill_dir) = installed_path {
+            // 尝试读取 metadata.json 获取版本
+            let metadata_path = skill_dir.join("metadata.json");
+            if metadata_path.exists() {
+                if let Ok(content) = std::fs::read_to_string(&metadata_path) {
+                    if let Ok(metadata) = serde_json::from_str::<serde_json::Value>(&content) {
+                        skill.installed_version = metadata.get("version")
+                            .and_then(|v| v.as_str())
+                            .map(|s| s.to_string());
+                    }
+                }
+            }
+        } else {
+            skill.installed_version = None;
+        }
+    }
+
+    Ok(cache)
 }
 
 /// 从市场源安装 Skills
@@ -601,6 +679,8 @@ pub async fn install_skill_from_marketplace(
     source_id: String,
     skill_names: Vec<String>,
     target_tools: Option<Vec<String>>,
+    workspace_path: Option<String>,
+    git_auth: Option<super::skills::GitAuthInput>,
 ) -> Result<String, String> {
     use super::skills::{install_skill_from_repo, read_skill_registry, write_skill_registry};
 
@@ -611,21 +691,29 @@ pub async fn install_skill_from_marketplace(
         .find(|s| s.id == source_id)
         .ok_or_else(|| format!("市场源 {} 不存在", source_id))?;
 
-    // 调用现有的安装函数
-    let result = install_skill_from_repo(source.url.clone(), Some(skill_names.clone()), target_tools, None).await?;
+    // 调用现有的安装函数，传递 workspace_path
+    let result = install_skill_from_repo(
+        source.url.clone(),
+        Some(skill_names.clone()),
+        target_tools,
+        workspace_path.clone(),
+        git_auth,
+    ).await?;
 
-    // 安装完成后，更新 metadata 中的 sourceId
-    let mut registry = read_skill_registry().map_err(|e| format!("读取注册表失败: {}", e))?;
+    // 只在全局模式下更新 metadata 中的 sourceId（因为注册表是全局的）
+    if workspace_path.is_none() {
+        let mut registry = read_skill_registry().map_err(|e| format!("读取注册表失败: {}", e))?;
 
-    for skill_name in &skill_names {
-        if let Some(entry) = registry.skills.iter_mut().find(|s| s.name == *skill_name) {
-            if let Some(ref mut metadata) = entry.metadata {
-                metadata.source_id = Some(source_id.clone());
+        for skill_name in &skill_names {
+            if let Some(entry) = registry.skills.iter_mut().find(|s| s.name == *skill_name) {
+                if let Some(ref mut metadata) = entry.metadata {
+                    metadata.source_id = Some(source_id.clone());
+                }
             }
         }
-    }
 
-    write_skill_registry(registry).map_err(|e| format!("写入注册表失败: {}", e))?;
+        write_skill_registry(registry).map_err(|e| format!("写入注册表失败: {}", e))?;
+    }
 
     Ok(result)
 }
@@ -699,4 +787,3 @@ pub async fn init_default_sources() -> Result<Vec<MarketplaceSource>, String> {
 
     Ok(added_sources)
 }
-
