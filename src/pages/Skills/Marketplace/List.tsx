@@ -53,6 +53,9 @@ import {
   refreshAllMarketplace,
 } from '@/services/marketplace';
 import type { MarketplaceSource, AddMarketplaceParams } from '@/types/marketplace';
+import type { GitAuthChallenge, GitAuthInput } from '@/types/skills';
+import { parseGitAuthChallenge } from '@/services/skills';
+import { GitAuthDialog } from '@/components/skills/GitAuthDialog';
 
 export default function MarketplaceList() {
   const navigate = useNavigate();
@@ -79,6 +82,12 @@ export default function MarketplaceList() {
   // 删除确认对话框状态
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [deletingSource, setDeletingSource] = useState<MarketplaceSource | null>(null);
+
+  // 认证对话框状态
+  const [authDialogOpen, setAuthDialogOpen] = useState(false);
+  const [authChallenge, setAuthChallenge] = useState<GitAuthChallenge | null>(null);
+  const [authDialogLoading, setAuthDialogLoading] = useState(false);
+  const [pendingAuthSourceId, setPendingAuthSourceId] = useState<string | null>(null);
 
   // 加载市场源列表
   const loadSources = async () => {
@@ -176,19 +185,42 @@ export default function MarketplaceList() {
   };
 
   // 刷新单个市场源
-  const handleRefreshSource = async (source: MarketplaceSource) => {
+  const handleRefreshSource = async (source: MarketplaceSource, gitAuth?: GitAuthInput) => {
     setRefreshingSources(new Set([...refreshingSources, source.id]));
     try {
-      await refreshMarketplace(source.id);
+      await refreshMarketplace(source.id, gitAuth);
       toast.success(`市场源 ${source.name} 刷新成功`);
+      setAuthDialogOpen(false);
+      setAuthChallenge(null);
+      setPendingAuthSourceId(null);
       await loadSources();
     } catch (err) {
+      const challenge = parseGitAuthChallenge(err);
+      if (challenge) {
+        setAuthChallenge(challenge);
+        setPendingAuthSourceId(source.id);
+        setAuthDialogOpen(true);
+        toast.error(challenge.message);
+        return;
+      }
       const message = err instanceof Error ? err.message : '刷新失败';
       toast.error(message);
     } finally {
       setRefreshingSources(
         new Set([...refreshingSources].filter((id) => id !== source.id))
       );
+    }
+  };
+
+  const handleAuthConfirmRefresh = async (auth: GitAuthInput) => {
+    if (!pendingAuthSourceId) return;
+    const source = sources.find((s) => s.id === pendingAuthSourceId);
+    if (!source) return;
+    setAuthDialogLoading(true);
+    try {
+      await handleRefreshSource(source, auth);
+    } finally {
+      setAuthDialogLoading(false);
     }
   };
 
@@ -242,7 +274,7 @@ export default function MarketplaceList() {
             <DialogContent>
               <DialogHeader>
                 <DialogTitle>添加市场源</DialogTitle>
-                <DialogDescription>添加一个 GitHub 仓库作为 Skill 市场源</DialogDescription>
+                <DialogDescription>添加一个 Git 仓库作为 Skill 市场源（支持 GitHub、GitLab 等任意托管平台）</DialogDescription>
               </DialogHeader>
               <div className="space-y-4">
                 <div>
@@ -258,7 +290,7 @@ export default function MarketplaceList() {
                   <Label htmlFor="url">仓库 URL</Label>
                   <Input
                     id="url"
-                    placeholder="https://github.com/username/repo"
+                    placeholder="https://github.com/username/repo 或 git@git.example.com:user/repo.git"
                     value={addForm.url}
                     onChange={(e) => setAddForm({ ...addForm, url: e.target.value })}
                   />
@@ -503,6 +535,15 @@ export default function MarketplaceList() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      {/* Git 认证对话框（刷新私有仓库时触发） */}
+      <GitAuthDialog
+        open={authDialogOpen}
+        onOpenChange={setAuthDialogOpen}
+        challenge={authChallenge}
+        loading={authDialogLoading}
+        onConfirm={handleAuthConfirmRefresh}
+      />
     </div>
   );
 }

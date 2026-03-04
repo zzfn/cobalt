@@ -373,8 +373,10 @@ pub fn update_marketplace(
 
 /// 刷新市场源（扫描并缓存 Skills）
 #[tauri::command]
-pub async fn refresh_marketplace(source_id: String) -> Result<MarketplaceCache, String> {
-    use std::process::Command;
+pub async fn refresh_marketplace(
+    source_id: String,
+    git_auth: Option<super::skills::GitAuthInput>,
+) -> Result<MarketplaceCache, String> {
     use chrono::Utc;
 
     let mut config = read_marketplace_config()?;
@@ -408,27 +410,14 @@ pub async fn refresh_marketplace(source_id: String) -> Result<MarketplaceCache, 
         fs::remove_dir_all(&temp_dir).map_err(|e| format!("删除临时目录失败: {}", e))?;
     }
 
-    // 克隆仓库到临时目录（浅克隆）
+    // 克隆仓库（自动 HTTPS → SSH fallback，认证失败返回结构化错误）
     println!("⏳ 开始克隆仓库...");
-    println!("🔧 执行命令: git clone --depth 1 {} {}", source.url, temp_dir.display());
-
-    let output = Command::new("git")
-        .args(&["clone", "--depth", "1", &source.url, temp_dir.to_str().unwrap()])
-        .env("GIT_TERMINAL_PROMPT", "0")  // 禁用交互式提示
-        .env("GIT_ASKPASS", "echo")       // 避免弹出密码提示
-        .output()
-        .map_err(|e| format!("执行 git clone 失败: {}", e))?;
-
-    if !output.status.success() {
-        let error = String::from_utf8_lossy(&output.stderr);
-        println!("❌ 克隆失败: {}", error);
-        return Err(format!("克隆仓库失败: {}。提示：请确保仓库 URL 正确且可公开访问", error));
-    }
-
-    let stdout = String::from_utf8_lossy(&output.stdout);
-    if !stdout.is_empty() {
-        println!("📝 Git 输出:\n{}", stdout);
-    }
+    super::skills::clone_repo(
+        &source.url,
+        temp_dir.to_str().unwrap(),
+        true,
+        git_auth.as_ref(),
+    )?;
 
     println!("✅ 仓库克隆成功");
 
@@ -604,7 +593,7 @@ pub async fn refresh_all_marketplace() -> Result<Vec<MarketplaceCache>, String> 
     let mut caches = Vec::new();
 
     for source in config.sources.iter().filter(|s| s.enabled) {
-        match refresh_marketplace(source.id.clone()).await {
+        match refresh_marketplace(source.id.clone(), None).await {
             Ok(cache) => caches.push(cache),
             Err(e) => {
                 eprintln!("刷新市场源 {} 失败: {}", source.name, e);

@@ -168,7 +168,7 @@ fn run_git_clone(url: &str, target_dir: &str, shallow: bool, auth: Option<&GitAu
     output
 }
 
-fn clone_repo(url: &str, target_dir: &str, shallow: bool, auth: Option<&GitAuthInput>) -> Result<(), String> {
+pub fn clone_repo(url: &str, target_dir: &str, shallow: bool, auth: Option<&GitAuthInput>) -> Result<(), String> {
     println!("⏳ [Backend] 开始克隆仓库...");
 
     if let Some(auth_input) = auth {

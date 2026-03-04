@@ -46,8 +46,8 @@ export async function updateMarketplace(params: UpdateMarketplaceParams): Promis
 /**
  * 刷新单个市场源
  */
-export async function refreshMarketplace(sourceId: string): Promise<MarketplaceCache> {
-  return invoke('refresh_marketplace', { sourceId });
+export async function refreshMarketplace(sourceId: string, gitAuth?: GitAuthInput): Promise<MarketplaceCache> {
+  return invoke('refresh_marketplace', { sourceId, gitAuth: gitAuth ?? null });
 }
 
 /**
