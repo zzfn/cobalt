@@ -16,6 +16,17 @@ export interface AiToolMeta {
 }
 
 /**
+ * 从后端获取的 AI 工具信息
+ */
+export interface AiToolInfo {
+  id: string;
+  name: string;
+  displayName: string;
+  icon: string;
+  relativePath: string;  // 相对路径，如 ".claude/skills/"
+}
+
+/**
  * AI 工具元数据映射
  */
 export const AI_TOOL_META: Record<AiToolType, AiToolMeta> = {
@@ -183,4 +194,17 @@ export interface ScannedSkillInfo {
   description?: string;
   version?: string;
   alreadyInstalled: boolean;
+}
+
+export interface GitAuthInput {
+  method: 'https' | 'ssh';
+  username?: string;
+  secret: string;
+}
+
+export interface GitAuthChallenge {
+  message: string;
+  suggestedMethod: 'https' | 'ssh';
+  canUseHttps: boolean;
+  canUseSsh: boolean;
 }

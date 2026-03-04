@@ -9,7 +9,8 @@ import {
 } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
-import { AI_TOOL_META, type AiToolType } from '@/types/skills';
+import { getSupportedAiTools } from '@/services/skills';
+import type { AiToolInfo } from '@/types/skills';
 
 interface TargetToolsDialogProps {
   open: boolean;
@@ -18,6 +19,8 @@ interface TargetToolsDialogProps {
   defaultTools?: string[];
   skillName?: string;
   excludeTools?: string[]; // 要排除的工具（已安装的工具）
+  workspacePath?: string | null; // 当前工作区路径
+  workspaceName?: string; // 当前工作区名称
 }
 
 export function TargetToolsDialog({
@@ -27,8 +30,18 @@ export function TargetToolsDialog({
   defaultTools = [],
   skillName,
   excludeTools = [],
+  workspacePath,
+  workspaceName,
 }: TargetToolsDialogProps) {
   const [selectedTools, setSelectedTools] = useState<Set<string>>(new Set());
+  const [toolsInfo, setToolsInfo] = useState<AiToolInfo[]>([]);
+
+  // 从后端加载工具信息（只加载一次）
+  useEffect(() => {
+    getSupportedAiTools()
+      .then(setToolsInfo)
+      .catch(err => console.error('加载工具信息失败:', err));
+  }, []);
 
   // 当对话框打开时，初始化选中的工具
   useEffect(() => {
@@ -61,10 +74,20 @@ export function TargetToolsDialog({
     onOpenChange(false);
   };
 
-  const allTools: AiToolType[] = ['claude-code', 'cursor', 'codex', 'opencode', 'antigravity', 'droid'];
-
   // 过滤掉已排除的工具
-  const availableTools = allTools.filter(tool => !excludeTools.includes(tool));
+  const availableTools = toolsInfo.filter(tool => !excludeTools.includes(tool.id));
+
+  // 根据是否在项目模式下显示不同的基础路径
+  const getInstallPath = (relativePath: string) => {
+    if (workspacePath) {
+      // 项目模式：显示各个工具的项目级目录
+      const projectDir = workspaceName || workspacePath;
+      return `${projectDir}/${relativePath}`;
+    } else {
+      // 全局模式：显示各个工具的路径
+      return `~/${relativePath}`;
+    }
+  };
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -77,6 +100,12 @@ export function TargetToolsDialog({
         </DialogHeader>
 
         <div className="space-y-4 py-4">
+          {workspacePath && (
+            <div className="text-sm text-muted-foreground bg-blue-50 dark:bg-blue-950/20 p-3 rounded-md border border-blue-200 dark:border-blue-800">
+              📁 当前安装到项目：<span className="font-medium">{workspaceName || workspacePath}</span>
+            </div>
+          )}
+
           {availableTools.length === 0 ? (
             <div className="text-center py-8 text-muted-foreground">
               该 Skill 已安装到所有支持的工具
@@ -84,42 +113,39 @@ export function TargetToolsDialog({
           ) : (
             <>
               <div className="space-y-3">
-                {availableTools.map((toolId) => {
-              const tool = AI_TOOL_META[toolId];
-              return (
-                <div
-                  key={toolId}
-                  className="flex items-center space-x-3 rounded-lg border p-4 hover:bg-accent/50 cursor-pointer transition-colors"
-                  onClick={() => toggleTool(toolId)}
-                >
-                  <Checkbox
-                    checked={selectedTools.has(toolId)}
-                    onCheckedChange={() => toggleTool(toolId)}
-                    onClick={(e) => e.stopPropagation()}
-                  />
-                  <div className="flex items-center gap-2 flex-1">
-                    <span className="text-2xl">{tool.icon}</span>
-                    <div>
-                      <div className="font-medium">{tool.displayName}</div>
-                      <div className="text-xs text-muted-foreground">
-                        ~/.{tool.name === 'claude-code' ? 'claude' : tool.name === 'opencode' ? 'config/opencode' : tool.name === 'antigravity' ? 'gemini/antigravity/global_skills' : tool.name}/skills/
+                {availableTools.map((tool) => (
+                  <div
+                    key={tool.id}
+                    className="flex items-center space-x-3 rounded-lg border p-4 hover:bg-accent/50 cursor-pointer transition-colors"
+                    onClick={() => toggleTool(tool.id)}
+                  >
+                    <Checkbox
+                      checked={selectedTools.has(tool.id)}
+                      onCheckedChange={() => toggleTool(tool.id)}
+                      onClick={(e) => e.stopPropagation()}
+                    />
+                    <div className="flex items-center gap-2 flex-1">
+                      <span className="text-2xl">{tool.icon}</span>
+                      <div>
+                        <div className="font-medium">{tool.displayName}</div>
+                        <div className="text-xs text-muted-foreground">
+                          {getInstallPath(tool.relativePath)}
+                        </div>
                       </div>
                     </div>
                   </div>
-                </div>
-              );
-            })}
+                ))}
           </div>
 
           {defaultTools.length > 0 && (
             <div className="text-sm text-muted-foreground bg-muted/50 p-3 rounded-md">
-              💡 提示：该 Skill 推荐安装到 {defaultTools.map(t => AI_TOOL_META[t as AiToolType]?.displayName).join(', ')}
+              💡 提示：该 Skill 推荐安装到 {defaultTools.map(t => toolsInfo.find(info => info.id === t)?.displayName || t).join(', ')}
             </div>
           )}
 
           {excludeTools.length > 0 && (
             <div className="text-sm text-muted-foreground bg-muted/50 p-3 rounded-md">
-              ℹ️ 已安装到：{excludeTools.map(t => AI_TOOL_META[t as AiToolType]?.displayName).join(', ')}
+              ℹ️ 已安装到：{excludeTools.map(t => toolsInfo.find(info => info.id === t)?.displayName || t).join(', ')}
             </div>
           )}
           </>

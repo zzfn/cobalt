@@ -1,6 +1,15 @@
 // Skills 服务 - 封装 Tauri 后端调用
 import { invoke } from '@tauri-apps/api/core';
-import type { SkillRegistryEntry, SkillDetail, SkillUpdateCheckResult, AiToolType } from '@/types/skills';
+import type {
+  SkillRegistryEntry,
+  SkillDetail,
+  SkillUpdateCheckResult,
+  AiToolType,
+  GitAuthInput,
+  GitAuthChallenge,
+} from '@/types/skills';
+
+const AUTH_REQUIRED_PREFIX = 'COBALT_AUTH_REQUIRED:';
 
 /**
  * 解析格式化的 skill 字符串
@@ -22,6 +31,19 @@ function parseSkillField(value: string | undefined): string {
 
   // 如果没有匹配到格式，直接返回原值
   return value;
+}
+
+export function parseGitAuthChallenge(error: unknown): GitAuthChallenge | null {
+  const message = typeof error === 'string' ? error : (error instanceof Error ? error.message : '');
+  const idx = message.indexOf(AUTH_REQUIRED_PREFIX);
+  if (idx === -1) return null;
+
+  const payload = message.slice(idx + AUTH_REQUIRED_PREFIX.length).trim();
+  try {
+    return JSON.parse(payload) as GitAuthChallenge;
+  } catch {
+    return null;
+  }
 }
 
 // 后端返回的 Skill 注册表条目类型
@@ -125,9 +147,10 @@ export async function listInstalledSkills(workspacePath?: string | null): Promis
 /**
  * 获取 Skill 详情
  */
-export async function getSkillDetail(skillName: string): Promise<SkillDetail> {
+export async function getSkillDetail(skillName: string, workspacePath?: string | null): Promise<SkillDetail> {
   const detail = await invoke<BackendSkillDetail>('read_skill_md', {
     skillName,
+    workspacePath: workspacePath ?? null,
   });
   return toSkillDetail(detail);
 }
@@ -137,16 +160,17 @@ export async function getSkillDetail(skillName: string): Promise<SkillDetail> {
  */
 export async function toggleSkill(
   skillName: string,
-  enabled: boolean
+  enabled: boolean,
+  workspacePath?: string | null
 ): Promise<void> {
-  await invoke('toggle_skill', { skillName, enabled });
+  await invoke('toggle_skill', { skillName, enabled, workspacePath: workspacePath ?? null });
 }
 
 /**
  * 卸载 Skill
  */
-export async function uninstallSkill(skillName: string): Promise<void> {
-  await invoke('uninstall_skill', { skillName });
+export async function uninstallSkill(skillName: string, workspacePath?: string | null): Promise<void> {
+  await invoke('uninstall_skill', { skillName, workspacePath: workspacePath ?? null });
 }
 
 /**
@@ -159,15 +183,25 @@ export async function listSkillFiles(skillName: string): Promise<string[]> {
 /**
  * 读取 Skill 中的指定文件内容
  */
-export async function readSkillFile(skillName: string, filePath: string): Promise<string> {
-  return invoke<string>('read_skill_file', { skillName, filePath });
+export async function readSkillFile(
+  skillName: string,
+  filePath: string,
+  workspacePath?: string | null
+): Promise<string> {
+  return invoke<string>('read_skill_file', { skillName, filePath, workspacePath: workspacePath ?? null });
 }
 
 /**
  * 扫描远程仓库中的 Skills（不安装）
  */
-export async function scanRepoSkills(repoUrl: string): Promise<import('@/types/skills').ScannedSkillInfo[]> {
-  return invoke<import('@/types/skills').ScannedSkillInfo[]>('scan_repo_skills', { repoUrl });
+export async function scanRepoSkills(
+  repoUrl: string,
+  gitAuth?: GitAuthInput
+): Promise<import('@/types/skills').ScannedSkillInfo[]> {
+  return invoke<import('@/types/skills').ScannedSkillInfo[]>('scan_repo_skills', {
+    repoUrl,
+    gitAuth: gitAuth ?? null
+  });
 }
 
 /**
@@ -177,13 +211,15 @@ export async function installSkillFromRepo(
   repoUrl: string,
   skillNames?: string[],
   targetTools?: string[],
-  workspacePath?: string | null
+  workspacePath?: string | null,
+  gitAuth?: GitAuthInput
 ): Promise<string> {
   return invoke<string>('install_skill_from_repo', {
     repoUrl,
     skillNames,
     targetTools: targetTools || null,
-    workspacePath: workspacePath ?? null
+    workspacePath: workspacePath ?? null,
+    gitAuth: gitAuth ?? null,
   });
 }
 
@@ -209,34 +245,41 @@ export async function createSkill(params: CreateSkillParams): Promise<string> {
 /**
  * 检查 Skill 是否有更新
  */
-export async function checkSkillUpdate(skillName: string): Promise<SkillUpdateCheckResult> {
-  return invoke<SkillUpdateCheckResult>('check_skill_update', { skillName });
+export async function checkSkillUpdate(skillName: string, workspacePath?: string | null): Promise<SkillUpdateCheckResult> {
+  return invoke<SkillUpdateCheckResult>('check_skill_update', { skillName, workspacePath: workspacePath ?? null });
 }
 
 /**
  * 更新 Skill 到最新版本
  */
-export async function updateSkill(skillName: string): Promise<string> {
-  return invoke<string>('update_skill', { skillName });
+export async function updateSkill(skillName: string, workspacePath?: string | null): Promise<string> {
+  return invoke<string>('update_skill', { skillName, workspacePath: workspacePath ?? null });
 }
 
 /**
  * 设置 Skill 的仓库地址
  */
-export async function setSkillRepository(skillName: string, repository: string): Promise<void> {
-  return invoke<void>('set_skill_repository', { skillName, repository });
+export async function setSkillRepository(skillName: string, repository: string, workspacePath?: string | null): Promise<void> {
+  return invoke<void>('set_skill_repository', { skillName, repository, workspacePath: workspacePath ?? null });
 }
 
 /**
  * 将已安装的 Skill 应用到其他 AI 工具
  */
-export async function applySkillToTools(skillName: string, targetTools: string[]): Promise<string> {
-  return invoke<string>('apply_skill_to_tools', { skillName, targetTools });
+export async function applySkillToTools(skillName: string, targetTools: string[], workspacePath?: string | null): Promise<string> {
+  return invoke<string>('apply_skill_to_tools', { skillName, targetTools, workspacePath: workspacePath ?? null });
 }
 
 /**
  * 从指定的 AI 工具中移除 Skill
  */
-export async function removeSkillFromTools(skillName: string, tools: string[]): Promise<string> {
-  return invoke<string>('remove_skill_from_tools', { skillName, tools });
+export async function removeSkillFromTools(skillName: string, tools: string[], workspacePath?: string | null): Promise<string> {
+  return invoke<string>('remove_skill_from_tools', { skillName, tools, workspacePath: workspacePath ?? null });
+}
+
+/**
+ * 获取所有支持的 AI 工具信息
+ */
+export async function getSupportedAiTools(): Promise<import('@/types/skills').AiToolInfo[]> {
+  return invoke<import('@/types/skills').AiToolInfo[]>('get_supported_ai_tools');
 }

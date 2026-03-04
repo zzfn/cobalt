@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { useAtomValue } from 'jotai';
 import { useParams, Link, useNavigate } from 'react-router-dom';
 import { ArrowLeft, Sparkles, Loader2, FileText, Trash2, Eye, Code, Tag, Folder, File, ChevronRight, ChevronDown, FolderOpen, RefreshCw, Download, AlertCircle, Share2, X } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
@@ -32,6 +33,7 @@ import { RemoveFromToolsDialog } from '@/components/skills/RemoveFromToolsDialog
 import type { SkillDetail as SkillDetailType, SkillUpdateCheckResult } from '@/types/skills';
 import { AI_TOOL_META, type AiToolType } from '@/types/skills';
 import { getSkillDetail, toggleSkill as toggleSkillApi, uninstallSkill, readSkillFile, checkSkillUpdate, updateSkill, setSkillRepository, applySkillToTools, removeSkillFromTools } from '@/services/skills';
+import { currentWorkspaceAtom } from '@/store/workspaceAtoms';
 import { logActivity } from '@/lib/activityLogger';
 import { toast } from 'sonner';
 
@@ -220,6 +222,7 @@ function FileTreeNode({
 export default function SkillDetail() {
   const { skillName } = useParams<{ skillName: string }>();
   const navigate = useNavigate();
+  const currentWorkspace = useAtomValue(currentWorkspaceAtom);
   const [skill, setSkill] = useState<SkillDetailType | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -331,7 +334,7 @@ export default function SkillDetail() {
     setLoading(true);
     setError(null);
     try {
-      const data = await getSkillDetail(skillName);
+      const data = await getSkillDetail(skillName, currentWorkspace?.path ?? null);
       setSkill(data);
       // 默认选中 SKILL.md 文件
       if (data.files && data.files.includes('SKILL.md')) {
@@ -349,7 +352,7 @@ export default function SkillDetail() {
   // 加载 Skill 详情
   useEffect(() => {
     loadSkill();
-  }, [skillName]);
+  }, [skillName, currentWorkspace?.path]);
 
   // 加载选中文件的内容
   useEffect(() => {
@@ -361,7 +364,7 @@ export default function SkillDetail() {
     const loadFileContent = async () => {
       setLoadingFile(true);
       try {
-        const content = await readSkillFile(skillName, selectedFile);
+        const content = await readSkillFile(skillName, selectedFile, currentWorkspace?.path ?? null);
         setFileContent(content);
       } catch (err) {
         console.error('加载文件内容失败:', err);
@@ -372,7 +375,7 @@ export default function SkillDetail() {
     };
 
     loadFileContent();
-  }, [skillName, selectedFile]);
+  }, [skillName, selectedFile, currentWorkspace?.path]);
 
   // 切换启用状态
   const handleToggle = async (enabled: boolean) => {
@@ -382,7 +385,7 @@ export default function SkillDetail() {
     setSkill((prev) => (prev ? { ...prev, enabled } : null));
 
     try {
-      await toggleSkillApi(skill.name, enabled);
+      await toggleSkillApi(skill.name, enabled, currentWorkspace?.path ?? null);
       // 记录活动
       logActivity(
         'skill_toggle',
@@ -401,7 +404,7 @@ export default function SkillDetail() {
     if (!skill) return;
 
     try {
-      await uninstallSkill(skill.name);
+      await uninstallSkill(skill.name, currentWorkspace?.path ?? null);
       toast.success(`Skill "${skill.name}" 已删除`);
       navigate('/skills');
     } catch (err) {
@@ -416,7 +419,7 @@ export default function SkillDetail() {
 
     setApplying(true);
     try {
-      const result = await applySkillToTools(skill.name, targetTools);
+      const result = await applySkillToTools(skill.name, targetTools, currentWorkspace?.path ?? null);
       toast.success(result);
       // 重新加载 skill 详情以更新 installedBy
       await loadSkill();
@@ -434,7 +437,7 @@ export default function SkillDetail() {
 
     setRemoving(true);
     try {
-      const result = await removeSkillFromTools(skill.name, tools);
+      const result = await removeSkillFromTools(skill.name, tools, currentWorkspace?.path ?? null);
       toast.success(result);
       // 重新加载 skill 详情以更新 installedBy
       await loadSkill();
@@ -451,7 +454,7 @@ export default function SkillDetail() {
     if (!skill) return;
     setCheckingUpdate(true);
     try {
-      const result = await checkSkillUpdate(skill.name);
+      const result = await checkSkillUpdate(skill.name, currentWorkspace?.path ?? null);
       setUpdateCheck(result);
       if (result.error) {
         console.error('检查更新失败:', result.error);
@@ -468,7 +471,7 @@ export default function SkillDetail() {
     if (!skill || !repoUrl.trim()) return;
     setSavingRepo(true);
     try {
-      await setSkillRepository(skill.name, repoUrl.trim());
+      await setSkillRepository(skill.name, repoUrl.trim(), currentWorkspace?.path ?? null);
       // 更新本地状态
       setSkill(prev => prev ? {
         ...prev,
@@ -493,10 +496,10 @@ export default function SkillDetail() {
     if (!skill) return;
     setUpdating(true);
     try {
-      const result = await updateSkill(skill.name);
+      const result = await updateSkill(skill.name, currentWorkspace?.path ?? null);
       toast.success(result);
       // 重新加载 skill 详情
-      const data = await getSkillDetail(skill.name);
+      const data = await getSkillDetail(skill.name, currentWorkspace?.path ?? null);
       setSkill(data);
       // 重置更新状态
       setUpdateCheck(null);
@@ -999,6 +1002,8 @@ export default function SkillDetail() {
           defaultTools={skill.metadata.targetTools || []}
           skillName={skill.name}
           excludeTools={skill.installedBy || []}
+          workspacePath={currentWorkspace?.path}
+          workspaceName={currentWorkspace?.name}
         />
       )}
 

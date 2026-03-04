@@ -1,7 +1,8 @@
-import { useEffect, useCallback } from 'react';
+import { useEffect, useCallback, useMemo } from 'react';
 import { useAtom } from 'jotai';
 import { RefreshCw, BarChart3 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { Alert, AlertDescription } from '@/components/ui/alert';
 import { toast } from 'sonner';
 import {
   statsCacheAtom,
@@ -24,6 +25,23 @@ export default function TokenUsage() {
   const [, setError] = useAtom(statsErrorAtom);
   const [overview] = useAtom(tokenOverviewAtom);
   const [modelColors] = useAtom(modelColorsAtom);
+
+  const statsFreshness = useMemo(() => {
+    if (!stats) return null;
+    const allDates = [
+      ...stats.dailyModelTokens.map((d) => d.date),
+      ...stats.dailyActivity.map((d) => d.date),
+    ];
+    if (allDates.length === 0) return null;
+
+    const latestDate = allDates.reduce((max, cur) => (cur > max ? cur : max));
+    const today = new Date().toISOString().slice(0, 10);
+    return {
+      latestDate,
+      isStale: latestDate < today,
+      today,
+    };
+  }, [stats]);
 
   const loadData = useCallback(async () => {
     setLoading(true);
@@ -65,6 +83,15 @@ export default function TokenUsage() {
 
       {/* 统计卡片 */}
       {overview && <OverviewCards overview={overview} loading={loading} />}
+
+      {statsFreshness?.isStale && (
+        <Alert>
+          <AlertDescription>
+            统计数据可能未更新：当前仅到 {statsFreshness.latestDate}，今天是 {statsFreshness.today}。
+            这通常是 Claude 的 stats 缓存尚未重算导致。
+          </AlertDescription>
+        </Alert>
+      )}
 
       {/* 图表区域 */}
       {stats && (

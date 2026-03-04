@@ -17,6 +17,7 @@ import { Label } from '@/components/ui/label';
 import { Checkbox } from '@/components/ui/checkbox';
 import { cn } from '@/lib/utils';
 import SkillCard from '@/components/common/SkillCard';
+import { GitAuthDialog } from '@/components/skills/GitAuthDialog';
 import {
   skillsListAtom,
   filteredSkillsAtom,
@@ -34,8 +35,9 @@ import {
   scanRepoSkills,
   installSkillFromRepo,
   uninstallSkill,
+  parseGitAuthChallenge,
 } from '@/services/skills';
-import type { ScannedSkillInfo } from '@/types/skills';
+import type { ScannedSkillInfo, GitAuthChallenge, GitAuthInput } from '@/types/skills';
 
 export default function SkillsList() {
   const [skills, setSkills] = useAtom(skillsListAtom);
@@ -55,6 +57,10 @@ export default function SkillsList() {
   const [scannedSkills, setScannedSkills] = useState<ScannedSkillInfo[]>([]);
   const [selectedSkills, setSelectedSkills] = useState<Set<string>>(new Set());
   const [selectedTools, setSelectedTools] = useState<Set<string>>(new Set(['claude-code']));
+  const [authDialogOpen, setAuthDialogOpen] = useState(false);
+  const [authDialogLoading, setAuthDialogLoading] = useState(false);
+  const [authChallenge, setAuthChallenge] = useState<GitAuthChallenge | null>(null);
+  const [authAction, setAuthAction] = useState<'scan' | 'install' | null>(null);
 
   // 加载 Skills 数据
   const loadSkills = useCallback(async () => {
@@ -102,7 +108,7 @@ export default function SkillsList() {
     );
 
     try {
-      await toggleSkillApi(skill.name, enabled);
+      await toggleSkillApi(skill.name, enabled, currentWorkspace?.path ?? null);
     } catch (err) {
       // 回滚
       setSkills((prev) =>
@@ -112,7 +118,10 @@ export default function SkillsList() {
     }
   };
 
-  const handleScanRepo = async () => {
+  const extractErrorMessage = (err: unknown, fallback: string) =>
+    typeof err === 'string' ? err : (err instanceof Error ? err.message : fallback);
+
+  const handleScanRepo = async (gitAuth?: GitAuthInput) => {
     if (!repoUrl.trim()) {
       setInstallError('请输入仓库 URL');
       return;
@@ -124,8 +133,11 @@ export default function SkillsList() {
     setSelectedSkills(new Set());
 
     try {
-      const skills = await scanRepoSkills(repoUrl);
+      const skills = await scanRepoSkills(repoUrl, gitAuth);
       setScannedSkills(skills);
+      setAuthDialogOpen(false);
+      setAuthChallenge(null);
+      setAuthAction(null);
 
       // 默认选中所有未安装的 skills
       const uninstalledSkills = skills
@@ -134,15 +146,21 @@ export default function SkillsList() {
       setSelectedSkills(new Set(uninstalledSkills));
     } catch (err) {
       console.error('❌ 扫描失败:', err);
-      // Tauri invoke 错误可能是字符串或 Error 对象
-      const message = typeof err === 'string' ? err : (err instanceof Error ? err.message : '扫描失败');
-      setInstallError(message);
+      const challenge = parseGitAuthChallenge(err);
+      if (challenge) {
+        setAuthChallenge(challenge);
+        setAuthAction('scan');
+        setAuthDialogOpen(true);
+        setInstallError(challenge.message);
+        return;
+      }
+      setInstallError(extractErrorMessage(err, '扫描失败'));
     } finally {
       setScanning(false);
     }
   };
 
-  const handleInstallSkill = async () => {
+  const handleInstallSkill = async (gitAuth?: GitAuthInput) => {
     if (selectedSkills.size === 0) {
       setInstallError('请至少选择一个 Skill');
       return;
@@ -160,9 +178,14 @@ export default function SkillsList() {
       const result = await installSkillFromRepo(
         repoUrl,
         Array.from(selectedSkills),
-        Array.from(selectedTools)
+        Array.from(selectedTools),
+        currentWorkspace?.path ?? null,
+        gitAuth
       );
       toast.success('安装成功', { description: result });
+      setAuthDialogOpen(false);
+      setAuthChallenge(null);
+      setAuthAction(null);
       setInstallDialogOpen(false);
       setRepoUrl('');
       setScannedSkills([]);
@@ -172,11 +195,31 @@ export default function SkillsList() {
       await loadSkills();
     } catch (err) {
       console.error('❌ 安装失败:', err);
-      // Tauri invoke 错误可能是字符串或 Error 对象
-      const message = typeof err === 'string' ? err : (err instanceof Error ? err.message : '安装失败');
-      setInstallError(message);
+      const challenge = parseGitAuthChallenge(err);
+      if (challenge) {
+        setAuthChallenge(challenge);
+        setAuthAction('install');
+        setAuthDialogOpen(true);
+        setInstallError(challenge.message);
+        return;
+      }
+      setInstallError(extractErrorMessage(err, '安装失败'));
     } finally {
       setInstalling(false);
+    }
+  };
+
+  const handleAuthConfirm = async (auth: GitAuthInput) => {
+    if (!authAction) return;
+    setAuthDialogLoading(true);
+    try {
+      if (authAction === 'scan') {
+        await handleScanRepo(auth);
+      } else {
+        await handleInstallSkill(auth);
+      }
+    } finally {
+      setAuthDialogLoading(false);
     }
   };
 
@@ -206,7 +249,7 @@ export default function SkillsList() {
 
   const handleDeleteSkill = async (skillName: string) => {
     try {
-      await uninstallSkill(skillName);
+      await uninstallSkill(skillName, currentWorkspace?.path ?? null);
       setSkills((prev) => prev.filter((s) => s.name !== skillName));
       toast.success(`Skill "${skillName}" 已删除`);
     } catch (err) {
@@ -297,7 +340,7 @@ export default function SkillsList() {
                       disabled={scanning || installing}
                     />
                     <Button
-                      onClick={handleScanRepo}
+                      onClick={() => handleScanRepo()}
                       disabled={scanning || installing || !repoUrl.trim()}
                     >
                       {scanning ? (
@@ -485,7 +528,7 @@ export default function SkillsList() {
                   </Button>
                   {scannedSkills.length > 0 && (
                     <Button
-                      onClick={handleInstallSkill}
+                      onClick={() => handleInstallSkill()}
                       disabled={installing || selectedSkills.size === 0}
                     >
                       {installing ? (
@@ -508,6 +551,14 @@ export default function SkillsList() {
           </Button>
         </div>
       </div>
+
+      <GitAuthDialog
+        open={authDialogOpen}
+        onOpenChange={setAuthDialogOpen}
+        challenge={authChallenge}
+        loading={authDialogLoading}
+        onConfirm={handleAuthConfirm}
+      />
 
       {/* 搜索和过滤 */}
       <div className="flex flex-col gap-4 sm:flex-row">

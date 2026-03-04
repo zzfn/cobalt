@@ -6,6 +6,7 @@ import type {
   AddMarketplaceParams,
   UpdateMarketplaceParams,
 } from '@/types/marketplace';
+import type { GitAuthInput } from '@/types/skills';
 
 /**
  * 列出所有市场源
@@ -59,8 +60,8 @@ export async function refreshAllMarketplace(): Promise<MarketplaceCache[]> {
 /**
  * 获取市场源的 Skills（从缓存）
  */
-export async function getMarketplaceSkills(sourceId: string): Promise<MarketplaceCache> {
-  return invoke('get_marketplace_skills', { sourceId });
+export async function getMarketplaceSkills(sourceId: string, workspacePath?: string | null): Promise<MarketplaceCache> {
+  return invoke('get_marketplace_skills', { sourceId, workspacePath: workspacePath ?? null });
 }
 
 /**
@@ -69,7 +70,15 @@ export async function getMarketplaceSkills(sourceId: string): Promise<Marketplac
 export async function installSkillFromMarketplace(
   sourceId: string,
   skillNames: string[],
-  targetTools?: string[]
+  targetTools?: string[],
+  workspacePath?: string | null,
+  gitAuth?: GitAuthInput
 ): Promise<string> {
-  return invoke('install_skill_from_marketplace', { sourceId, skillNames, targetTools });
+  return invoke('install_skill_from_marketplace', {
+    sourceId,
+    skillNames,
+    targetTools,
+    workspacePath: workspacePath ?? null,
+    gitAuth: gitAuth ?? null,
+  });
 }

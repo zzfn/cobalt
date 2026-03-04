@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { useAtom } from 'jotai';
+import { useAtom, useAtomValue } from 'jotai';
 import {
   ArrowLeft,
   RefreshCw,
@@ -17,19 +17,24 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Checkbox } from '@/components/ui/checkbox';
 import { toast } from 'sonner';
 import { marketplaceListAtom, marketplaceCachesAtom } from '@/store/marketplaceAtoms';
+import { currentWorkspaceAtom } from '@/store/workspaceAtoms';
 import {
   getMarketplaceSkills,
   refreshMarketplace,
   installSkillFromMarketplace,
 } from '@/services/marketplace';
+import { parseGitAuthChallenge } from '@/services/skills';
 import { TargetToolsDialog } from '@/components/skills/TargetToolsDialog';
+import { GitAuthDialog } from '@/components/skills/GitAuthDialog';
 import type { CachedSkillInfo } from '@/types/marketplace';
+import type { GitAuthChallenge, GitAuthInput } from '@/types/skills';
 
 export default function MarketplaceDetail() {
   const { sourceId } = useParams<{ sourceId: string }>();
   const navigate = useNavigate();
   const [sources] = useAtom(marketplaceListAtom);
   const [caches, setCaches] = useAtom(marketplaceCachesAtom);
+  const currentWorkspace = useAtomValue(currentWorkspaceAtom);
 
   const [loading, setLoading] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
@@ -40,6 +45,10 @@ export default function MarketplaceDetail() {
   const [showTargetToolsDialog, setShowTargetToolsDialog] = useState(false);
   const [pendingInstallSkills, setPendingInstallSkills] = useState<string[]>([]);
   const [pendingInstallDefaultTools, setPendingInstallDefaultTools] = useState<string[]>([]);
+  const [pendingTargetTools, setPendingTargetTools] = useState<string[]>([]);
+  const [authDialogOpen, setAuthDialogOpen] = useState(false);
+  const [authChallenge, setAuthChallenge] = useState<GitAuthChallenge | null>(null);
+  const [authDialogLoading, setAuthDialogLoading] = useState(false);
 
   const source = sources.find((s) => s.id === sourceId);
   const cache = sourceId ? caches[sourceId] : null;
@@ -50,7 +59,7 @@ export default function MarketplaceDetail() {
 
     setLoading(true);
     try {
-      const data = await getMarketplaceSkills(sourceId);
+      const data = await getMarketplaceSkills(sourceId, currentWorkspace?.path ?? null);
       setCaches({ ...caches, [sourceId]: data });
     } catch (err) {
       const message = err instanceof Error ? err.message : '加载 Skills 失败';
@@ -64,7 +73,7 @@ export default function MarketplaceDetail() {
     if (sourceId) {
       loadSourceSkills();
     }
-  }, [sourceId]);
+  }, [sourceId, currentWorkspace?.path]);
 
   // 刷新市场源
   const handleRefresh = async () => {
@@ -99,22 +108,50 @@ export default function MarketplaceDetail() {
   };
 
   // 确认安装到选中的工具
-  const handleConfirmInstall = async (targetTools: string[]) => {
+  const handleConfirmInstall = async (targetTools: string[], gitAuth?: GitAuthInput) => {
     if (!sourceId || pendingInstallSkills.length === 0) return;
 
+    setPendingTargetTools(targetTools);
     setInstalling(true);
     try {
-      await installSkillFromMarketplace(sourceId, pendingInstallSkills, targetTools);
+      await installSkillFromMarketplace(
+        sourceId,
+        pendingInstallSkills,
+        targetTools,
+        currentWorkspace?.path ?? null,
+        gitAuth
+      );
       toast.success(`成功安装 ${pendingInstallSkills.length} 个 Skill(s) 到 ${targetTools.length} 个工具`);
       setSelectedSkills(new Set());
       setPendingInstallSkills([]);
       setPendingInstallDefaultTools([]);
+      setPendingTargetTools([]);
+      setAuthDialogOpen(false);
+      setAuthChallenge(null);
       await loadSourceSkills();
     } catch (err) {
+      const challenge = parseGitAuthChallenge(err);
+      if (challenge) {
+        setAuthChallenge(challenge);
+        setAuthDialogOpen(true);
+        toast.error(challenge.message);
+        return;
+      }
+
       const message = err instanceof Error ? err.message : '安装失败';
       toast.error(message);
     } finally {
       setInstalling(false);
+    }
+  };
+
+  const handleAuthConfirm = async (auth: GitAuthInput) => {
+    if (pendingTargetTools.length === 0) return;
+    setAuthDialogLoading(true);
+    try {
+      await handleConfirmInstall(pendingTargetTools, auth);
+    } finally {
+      setAuthDialogLoading(false);
     }
   };
 
@@ -390,6 +427,16 @@ export default function MarketplaceDetail() {
         onConfirm={handleConfirmInstall}
         defaultTools={pendingInstallDefaultTools}
         skillName={pendingInstallSkills.length === 1 ? pendingInstallSkills[0] : undefined}
+        workspacePath={currentWorkspace?.path}
+        workspaceName={currentWorkspace?.name}
+      />
+
+      <GitAuthDialog
+        open={authDialogOpen}
+        onOpenChange={setAuthDialogOpen}
+        challenge={authChallenge}
+        loading={authDialogLoading}
+        onConfirm={handleAuthConfirm}
       />
     </div>
   );
