@@ -4,7 +4,6 @@ import type {
   SkillDetail,
   SkillFilter,
   SkillSortOption,
-  AiToolType,
 } from '@/types/skills';
 import type { WorkspaceScope } from '@/types/workspace';
 
