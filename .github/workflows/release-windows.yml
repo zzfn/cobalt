@@ -50,3 +50,5 @@ jobs:
           releaseDraft: false
           prerelease: false
           args: --target x86_64-pc-windows-msvc
+          # 生成 latest.json 用于自动更新
+          includeUpdaterJson: true
