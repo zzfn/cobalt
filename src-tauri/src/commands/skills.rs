@@ -535,30 +535,55 @@ pub struct SkillDetail {
 /// 读取 Skill 的 SKILL.md 内容
 #[tauri::command]
 pub fn read_skill_md(skill_name: String, workspace_path: Option<String>) -> Result<SkillDetail, String> {
-    let (skills_dir, disabled_skills_dir) = if let Some(ref ws_path) = workspace_path {
+    let (skill_dir, enabled, found_in_tool) = if let Some(ref ws_path) = workspace_path {
+        // 工作区模式：在工作区的 .claude/skills 和 .claude/.disabled_skills 中查找
         let ws_path_buf = PathBuf::from(ws_path);
-        (
-            ws_path_buf.join(".claude").join("skills"),
-            ws_path_buf.join(".claude").join(".disabled_skills")
-        )
-    } else {
-        (
-            get_skills_dir()?,
-            get_claude_dir()?.join(".disabled_skills")
-        )
-    };
+        let skills_dir = ws_path_buf.join(".claude").join("skills");
+        let disabled_skills_dir = ws_path_buf.join(".claude").join(".disabled_skills");
 
-    // 尝试从两个目录中查找
-    let enabled_path = skills_dir.join(&skill_name);
-    let disabled_path = disabled_skills_dir.join(&skill_name);
-    let disabled_exists = disabled_path.exists();
+        let enabled_path = skills_dir.join(&skill_name);
+        let disabled_path = disabled_skills_dir.join(&skill_name);
 
-    let (skill_dir, enabled) = if enabled_path.exists() {
-        (enabled_path, true)
-    } else if disabled_exists {
-        (disabled_path, false)
+        if enabled_path.exists() {
+            (enabled_path, true, Some("claude-code".to_string()))
+        } else if disabled_path.exists() {
+            (disabled_path, false, Some("claude-code".to_string()))
+        } else {
+            return Err(format!("Skill '{}' 不存在", skill_name));
+        }
     } else {
-        return Err(format!("Skill '{}' 不存在", skill_name));
+        // 全局模式：先在 claude 目录查找，再查找其他工具目录
+        let skills_dir = get_skills_dir()?;
+        let disabled_skills_dir = get_claude_dir()?.join(".disabled_skills");
+
+        let enabled_path = skills_dir.join(&skill_name);
+        let disabled_path = disabled_skills_dir.join(&skill_name);
+
+        // 优先从 claude-code 目录查找
+        if enabled_path.exists() {
+            (enabled_path, true, Some("claude-code".to_string()))
+        } else if disabled_path.exists() {
+            (disabled_path, false, Some("claude-code".to_string()))
+        } else {
+            // 在其他工具目录中查找
+            let tool_dirs = get_all_tool_skills_dirs();
+            let mut found_dir = None;
+            let mut found_tool = None;
+
+            for (tool_name, tool_dir) in tool_dirs {
+                let tool_skill_path = tool_dir.join(&skill_name);
+                if tool_skill_path.exists() {
+                    found_dir = Some(tool_skill_path);
+                    found_tool = Some(tool_name.to_string());
+                    break;
+                }
+            }
+
+            match found_dir {
+                Some(dir) => (dir, true, found_tool),
+                None => return Err(format!("Skill '{}' 不存在", skill_name)),
+            }
+        }
     };
 
     // 读取 SKILL.md
@@ -585,26 +610,39 @@ pub fn read_skill_md(skill_name: String, workspace_path: Option<String>) -> Resu
 
     // 计算 installed_by
     let (id, installed_by) = if workspace_path.is_none() {
+        // 全局模式：优先使用注册表数据，如果 skill 不在注册表中，使用 found_in_tool
         let registry = read_skill_registry()?;
         let entry = registry.skills.iter().find(|s| s.name == skill_name);
+
+        let installed_by_vec = if let Some(entry) = entry {
+            entry.installed_by.clone()
+        } else if let Some(tool) = found_in_tool {
+            vec![tool]
+        } else {
+            Vec::new()
+        };
+
         (
             entry.map(|e| e.id.clone()).unwrap_or_else(|| skill_name.clone()),
-            entry.map(|e| e.installed_by.clone()).unwrap_or_else(Vec::new)
+            installed_by_vec
         )
     } else {
         // 工作区模式：根据各工具目录实际存在情况动态计算
         let ws_path_buf = PathBuf::from(workspace_path.as_ref().ok_or_else(|| "工作区路径缺失".to_string())?);
         let mut installed = Vec::new();
 
-        for (tool_name, tool_dir) in get_all_tool_workspace_skills_dirs(&ws_path_buf) {
-            if tool_dir.join(&skill_name).exists() {
-                installed.push(tool_name.to_string());
-            }
+        // 如果找到了，添加到列表
+        if let Some(ref tool) = found_in_tool {
+            installed.push(tool.clone());
         }
 
-        // claude-code 还可能处于 .disabled_skills 目录
-        if disabled_exists && !installed.iter().any(|t| t == "claude-code") {
-            installed.push("claude-code".to_string());
+        // 检查其他工具目录
+        for (tool_name, tool_dir) in get_all_tool_workspace_skills_dirs(&ws_path_buf) {
+            if tool_dir.join(&skill_name).exists() {
+                if !installed.iter().any(|t| t == tool_name) {
+                    installed.push(tool_name.to_string());
+                }
+            }
         }
 
         (skill_name.clone(), installed)
