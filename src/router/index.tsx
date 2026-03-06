@@ -8,6 +8,7 @@ const GeneralSettings = React.lazy(() => import('@/pages/Settings/General'));
 const InstructionsSettings = React.lazy(() => import('@/pages/Settings/Instructions'));
 const ClaudeCodeSettings = React.lazy(() => import('@/pages/Settings/ClaudeCode'));
 const SettingsJsonEditor = React.lazy(() => import('@/pages/Settings/SettingsJson'));
+const ClaudeJsonEditor = React.lazy(() => import('@/pages/Settings/ClaudeJson'));
 const CacheSettings = React.lazy(() => import('@/pages/Settings/Cache'));
 const SkillsList = React.lazy(() => import('@/pages/Skills/List'));
 const SkillDetail = React.lazy(() => import('@/pages/Skills/Detail'));
@@ -50,6 +51,10 @@ export const router = createBrowserRouter([
           {
             path: 'settings-json',
             element: <SettingsJsonEditor />,
+          },
+          {
+            path: 'claude-json',
+            element: <ClaudeJsonEditor />,
           },
           {
             path: 'cache',

@@ -38,6 +38,20 @@ export async function writeSettings(settings: ClaudeCodeSettings): Promise<void>
 }
 
 /**
+ * 读取 claude.json（全局配置）
+ */
+export async function readClaudeJson(): Promise<ClaudeCodeSettings> {
+  return invoke<ClaudeCodeSettings>('read_claude_json');
+}
+
+/**
+ * 写入 claude.json（全局配置）
+ */
+export async function writeClaudeJson(config: ClaudeCodeSettings): Promise<void> {
+  await invoke('write_claude_json', { config });
+}
+
+/**
  * 读取 CLAUDE.md（全局指令）
  */
 export async function readClaudeMd(): Promise<string> {

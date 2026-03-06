@@ -49,6 +49,36 @@ pub fn write_settings(settings: serde_json::Value) -> Result<(), String> {
     fs::write(&settings_path, content).map_err(|e| format!("写入 settings.json 失败: {}", e))
 }
 
+/// 读取 claude.json（全局配置，位于用户主目录）
+#[tauri::command]
+pub fn read_claude_json() -> Result<serde_json::Value, String> {
+    let claude_json_path = dirs::home_dir()
+        .map(|home| home.join(".claude.json"))
+        .ok_or_else(|| "无法获取用户主目录".to_string())?;
+
+    if !claude_json_path.exists() {
+        return Ok(serde_json::json!({}));
+    }
+
+    let content = fs::read_to_string(&claude_json_path)
+        .map_err(|e| format!("读取 claude.json 失败: {}", e))?;
+
+    serde_json::from_str(&content).map_err(|e| format!("解析 claude.json 失败: {}", e))
+}
+
+/// 写入 claude.json（全局配置，位于用户主目录）
+#[tauri::command]
+pub fn write_claude_json(config: serde_json::Value) -> Result<(), String> {
+    let claude_json_path = dirs::home_dir()
+        .map(|home| home.join(".claude.json"))
+        .ok_or_else(|| "无法获取用户主目录".to_string())?;
+
+    let content = serde_json::to_string_pretty(&config)
+        .map_err(|e| format!("序列化 claude.json 失败: {}", e))?;
+
+    fs::write(&claude_json_path, content).map_err(|e| format!("写入 claude.json 失败: {}", e))
+}
+
 /// 读取 CLAUDE.md（全局指令）
 #[tauri::command]
 pub fn read_claude_md() -> Result<String, String> {
@@ -283,8 +313,8 @@ pub fn read_conversation_history(limit: Option<usize>) -> Result<Vec<Conversatio
     let limit = limit.unwrap_or(50);
     let mut records = Vec::new();
 
-    for (index, line) in content.lines().rev().enumerate() {
-        if index >= limit {
+    for line in content.lines().rev() {
+        if records.len() >= limit {
             break;
         }
 
@@ -293,11 +323,16 @@ pub fn read_conversation_history(limit: Option<usize>) -> Result<Vec<Conversatio
             continue;
         }
 
-        let json_value: serde_json::Value = serde_json::from_str(line)
-            .map_err(|e| format!("解析 history.jsonl 行失败: {}", e))?;
+        let json_value: serde_json::Value = match serde_json::from_str(line) {
+            Ok(value) => value,
+            Err(e) => {
+                eprintln!("⚠️  跳过无效 history.jsonl 行: {}", e);
+                continue;
+            }
+        };
 
         let record = ConversationRecord {
-            id: format!("conv_{}", index),
+            id: format!("conv_{}", records.len()),
             display: json_value["display"].as_str().unwrap_or("").to_string(),
             timestamp: json_value["timestamp"].as_i64().unwrap_or(0),
             project: json_value["project"].as_str().map(|s| s.to_string()),

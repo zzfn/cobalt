@@ -5,9 +5,9 @@ mod commands;
 
 use commands::{
     // 配置命令
-    backup_config, clear_api_config, detect_env_conflicts, get_claude_config_dir, read_api_profiles, read_claude_md,
+    backup_config, clear_api_config, detect_env_conflicts, get_claude_config_dir, read_api_profiles, read_claude_json, read_claude_md,
     read_conversation_history, read_settings, remove_env_from_shell, switch_api_profile, update_env_vars,
-    write_api_profiles, write_claude_md, write_settings,
+    write_api_profiles, write_claude_json, write_claude_md, write_settings,
     // Skills 命令
     check_skill_update, create_skill, install_skill_from_repo, list_installed_skills,
     list_skill_files, read_skill_file, read_skill_md, read_skill_registry, scan_repo_skills,
@@ -89,6 +89,8 @@ pub fn run() {
             get_claude_config_dir,
             read_settings,
             write_settings,
+            read_claude_json,
+            write_claude_json,
             read_claude_md,
             write_claude_md,
             backup_config,

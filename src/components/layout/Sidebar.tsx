@@ -57,6 +57,7 @@ const navGroups: NavGroup[] = [
           { title: 'API Key', href: '/settings/claude-code', icon: Key },
           { title: 'CLAUDE.md', href: '/settings/instructions', icon: FileText },
           { title: 'settings.json', href: '/settings/settings-json', icon: FileJson },
+          { title: 'claude.json', href: '/settings/claude-json', icon: FileJson },
           { title: '缓存管理', href: '/settings/cache', icon: HardDrive },
           { title: 'Token 用量', href: '/token-usage', icon: BarChart3 },
         ],
