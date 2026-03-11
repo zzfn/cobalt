@@ -25,10 +25,9 @@ interface SkillCardProps {
   onToggle?: (enabled: boolean) => void;
   onDelete?: () => void;
   className?: string;
-  sourceName?: string;  // 市场源名称（可选）
 }
 
-export default function SkillCard({ skill, onToggle, onDelete, className, sourceName }: SkillCardProps) {
+export default function SkillCard({ skill, onToggle, onDelete, className }: SkillCardProps) {
   const isCobaltManaged = Boolean(
     skill.metadata.sourceId ||
     skill.metadata.repository ||
@@ -36,7 +35,7 @@ export default function SkillCard({ skill, onToggle, onDelete, className, source
   );
 
   return (
-    <Card className={cn('group relative h-full border-border/70 bg-card/88 transition-all duration-200 hover:-translate-y-1 hover:border-primary/25 hover:shadow-[0_24px_60px_-34px_rgba(25,39,52,0.45)]', className)}>
+    <Card className={cn('group relative h-full border-border/70 bg-card/88 hover:border-primary/25 hover:shadow-[0_24px_60px_-34px_rgba(25,39,52,0.45)]', className)}>
       <CardHeader className="pb-3">
         <div className="flex items-start justify-between">
           <div className="flex items-center gap-3">
@@ -85,14 +84,9 @@ export default function SkillCard({ skill, onToggle, onDelete, className, source
       <CardContent>
         <div className="space-y-2">
           <div className="flex flex-wrap items-center gap-2">
-            {skill.metadata.sourceId && sourceName && (
-              <Badge variant="secondary" className="text-xs">
-                来自 {sourceName}
-              </Badge>
-            )}
             {!isCobaltManaged && (
               <Badge variant="outline" className="text-xs">
-                非 Cobalt 安装
+                来源未知
               </Badge>
             )}
             {skill.installedBy && skill.installedBy.length > 0 && (
@@ -112,6 +106,11 @@ export default function SkillCard({ skill, onToggle, onDelete, className, source
               </div>
             )}
           </div>
+          {!isCobaltManaged && (
+            <p className="text-xs leading-5 text-muted-foreground">
+              可能是手动放入 skills 目录。
+            </p>
+          )}
           <div className="flex flex-wrap items-center gap-2">
             {skill.metadata.targetTools?.map((toolType) => {
               const toolMeta = AI_TOOL_META[toolType as keyof typeof AI_TOOL_META];

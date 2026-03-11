@@ -559,8 +559,8 @@ export default function SkillDetail() {
             <CardContent className="space-y-5 pt-6">
               <div className="space-y-3">
                 <div className="flex flex-wrap items-center gap-2">
-                  {!isCobaltManaged && <Badge variant="outline">非 Cobalt 安装</Badge>}
-                  {skill.metadata.sourceId && <Badge variant="secondary">市场安装</Badge>}
+                  {!isCobaltManaged && <Badge variant="outline">来源未知</Badge>}
+                  {skill.metadata.sourceId && <Badge variant="secondary">来自 Skill 市场</Badge>}
                   {skill.metadata.version && <Badge variant="outline">v{skill.metadata.version}</Badge>}
                 </div>
                 <div>
@@ -576,10 +576,10 @@ export default function SkillDetail() {
               {!isCobaltManaged && (
                 <div className="rounded-[18px] border border-amber-500/20 bg-amber-500/8 px-4 py-3">
                   <p className="text-sm font-medium text-amber-600 dark:text-amber-400">
-                    不是通过 Cobalt 安装的 Skill
+                    来源和安装记录不完整
                   </p>
                   <p className="mt-1 text-xs leading-6 text-muted-foreground">
-                    这个 Skill 缺少 Cobalt 的安装记录和来源信息，所以来源展示、更新检测等依赖元数据的功能可能不可用。
+                    这个 Skill 不是通过 Cobalt 安装的，所以来源和更新信息可能不完整。
                   </p>
                 </div>
               )}
@@ -605,7 +605,7 @@ export default function SkillDetail() {
                 <div className="panel-muted px-4 py-3">
                   <p className="text-[11px] uppercase tracking-[0.18em] text-muted-foreground/70">来源</p>
                   <p className="mt-2 text-sm font-medium">
-                    {skill.metadata.sourceId ? '来自 Skill 市场' : skill.metadata.repository ? '已配置仓库地址' : '来源未记录'}
+                    {skill.metadata.sourceId ? '来自 Skill 市场' : skill.metadata.repository ? '来自仓库地址' : '来源未知'}
                   </p>
                   <p className="mt-1 text-xs text-muted-foreground">
                     {skill.metadata.sourceId || skill.metadata.repository || '可能是手动放入 skills 目录'}
