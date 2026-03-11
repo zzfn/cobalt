@@ -68,7 +68,7 @@ export function MarketplaceSkillPreviewDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-5xl max-h-[90vh] overflow-y-auto flex flex-col gap-6 p-6">
         {/* 标题卡片 - 与详情页相同的渐变样式 */}
-        <Card className="border-primary/20 bg-gradient-to-br from-primary/5 via-background to-background shrink-0">
+        <Card className="border-primary/20 bg-background shrink-0">
           <CardContent className="pt-6">
             <div className="flex items-start justify-between gap-4">
               <div className="flex items-start gap-4 flex-1">

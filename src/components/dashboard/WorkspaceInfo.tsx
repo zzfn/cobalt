@@ -1,5 +1,4 @@
 import { Link } from 'react-router-dom';
-import { Home } from 'lucide-react';
 import { Card, CardContent } from '@/components/ui/card';
 import { useAtomValue } from 'jotai';
 import { currentWorkspaceAtom } from '@/store/workspaceAtoms';
@@ -8,23 +7,21 @@ export default function WorkspaceInfo() {
   const currentWorkspace = useAtomValue(currentWorkspaceAtom);
 
   return (
-    <Card className="border border-border-strong">
-      <CardContent className="p-4">
+    <Card className="h-full border-border/70 bg-card">
+      <CardContent className="p-5 sm:p-6">
         <div className="flex items-center justify-between">
-          <div className="flex items-center gap-3 min-w-0">
-            <div className="flex items-center justify-center w-9 h-9 rounded-lg bg-muted/50">
-              <Home className="h-4 w-4 text-muted-foreground/60" strokeWidth={1.5} />
-            </div>
-            <div className="min-w-0">
-              <p className="text-xs text-muted-foreground/60">当前工作区</p>
-              <p className="text-sm font-medium truncate">
-                {currentWorkspace?.name || '全局模式'}
-              </p>
-            </div>
+          <div className="min-w-0">
+            <p className="text-xs uppercase tracking-[0.22em] text-muted-foreground/65">Workspace</p>
+            <p className="mt-2 text-base font-semibold tracking-[-0.03em] truncate">
+              {currentWorkspace?.name || '全局模式'}
+            </p>
+            <p className="mt-1 text-xs text-muted-foreground/70">
+              {currentWorkspace?.path || '未锁定到具体项目目录'}
+            </p>
           </div>
           <Link
             to="/settings/general"
-            className="text-xs text-muted-foreground/60 hover:text-foreground px-3 py-1.5 rounded hover:bg-muted/50 transition-colors"
+            className="rounded-full border border-border/70 bg-background/75 px-3 py-1.5 text-xs font-medium text-muted-foreground transition-colors hover:text-foreground"
           >
             管理
           </Link>

@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useAtom } from 'jotai';
-import { FileText, Save, Loader2, RefreshCw } from 'lucide-react';
+import { Save, Loader2, RefreshCw } from 'lucide-react';
 import {
   Card,
   CardContent,
@@ -89,14 +89,11 @@ export default function InstructionsSettings() {
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
-        <div className="flex items-center gap-3">
-          <FileText className="h-8 w-8" />
-          <div>
-            <h1 className="text-2xl font-bold">指令配置</h1>
-            <p className="text-muted-foreground">
-              编辑 Claude 的全局和项目指令
-            </p>
-          </div>
+        <div>
+          <h1 className="text-2xl font-bold">指令配置</h1>
+          <p className="text-muted-foreground">
+            编辑 Claude 的全局和项目指令
+          </p>
         </div>
         <div className="flex items-center gap-2">
           <Button

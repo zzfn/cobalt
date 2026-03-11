@@ -1,26 +1,10 @@
 import { cn } from '@/lib/utils';
-import type { ActivityRecord, ActivityType } from '@/types/dashboard';
-import {
-  Archive,
-  Key,
-  MessageSquare,
-  Settings,
-  Sparkles,
-  type LucideIcon,
-} from 'lucide-react';
+import type { ActivityRecord } from '@/types/dashboard';
 
 interface ActivityItemProps {
   activity: ActivityRecord;
   className?: string;
 }
-
-const activityIcons: Record<ActivityType, LucideIcon> = {
-  skill_toggle: Sparkles,
-  profile_switch: Key,
-  settings_update: Settings,
-  backup_created: Archive,
-  conversation: MessageSquare,
-};
 
 /**
  * 格式化相对时间
@@ -51,17 +35,11 @@ function formatRelativeTime(timestamp: string): string {
 }
 
 export default function ActivityItem({ activity, className }: ActivityItemProps) {
-  const Icon = activityIcons[activity.type];
-
   return (
-    <div className={cn('flex items-start gap-3 py-2.5 px-1', className)}>
-      {/* 克制的图标 - 极小，低不透明度 */}
-      <div className="mt-0.5 text-muted-foreground/30">
-        <Icon className="h-3.5 w-3.5" strokeWidth={1.5} />
-      </div>
-      <div className="flex-1 min-w-0">
-        <p className="text-sm leading-snug">{activity.description}</p>
-        <p className="mt-0.5 text-xs text-muted-foreground/60">
+    <div className={cn('rounded-[16px] border border-border/55 px-3.5 py-2.5', className)}>
+      <div className="min-w-0">
+        <p className="text-[13px] leading-5">{activity.description}</p>
+        <p className="mt-0.5 text-[11px] text-muted-foreground/60">
           {formatRelativeTime(activity.timestamp)}
         </p>
       </div>

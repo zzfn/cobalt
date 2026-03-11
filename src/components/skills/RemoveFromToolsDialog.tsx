@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { AlertTriangle } from 'lucide-react';
 import {
   Dialog,
   DialogContent,
@@ -10,7 +11,6 @@ import {
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
 import { AI_TOOL_META, type AiToolType } from '@/types/skills';
-import { AlertCircle } from 'lucide-react';
 
 interface RemoveFromToolsDialogProps {
   open: boolean;
@@ -58,30 +58,30 @@ export function RemoveFromToolsDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-[500px]">
-        <DialogHeader>
-          <DialogTitle>从工具中移除</DialogTitle>
+      <DialogContent className="sm:max-w-[540px]">
+        <DialogHeader className="space-y-2">
+          <DialogTitle className="text-base">从工具中移除</DialogTitle>
           <DialogDescription>
             {skillName ? `选择要从哪些工具中移除 "${skillName}"` : '选择要从哪些工具中移除'}
           </DialogDescription>
         </DialogHeader>
 
-        <div className="space-y-4 py-4">
+        <div className="space-y-3 py-1">
           {isLastTool && (
-            <div className="flex items-start gap-2 p-3 rounded-md bg-amber-50 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-800">
-              <AlertCircle className="h-4 w-4 text-amber-600 dark:text-amber-500 mt-0.5 shrink-0" />
-              <div className="text-sm text-amber-800 dark:text-amber-200">
-                <strong>注意：</strong>这是该 Skill 安装的最后一个工具。移除后，该 Skill 将被完全卸载。
+            <div className="flex items-start gap-2 rounded-[14px] border border-amber-300/70 bg-amber-50/80 px-3 py-2 text-sm text-amber-900 dark:border-amber-800/80 dark:bg-amber-950/20 dark:text-amber-100">
+              <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-amber-700 dark:text-amber-300" />
+              <div className="leading-5">
+                这是该 Skill 安装的最后一个工具。移除后，这个 Skill 会被一并卸载。
               </div>
             </div>
           )}
 
           {installedTools.length === 0 ? (
-            <div className="text-center py-8 text-muted-foreground">
+            <div className="rounded-[14px] border border-border/70 bg-muted/20 py-7 text-center text-sm text-muted-foreground">
               该 Skill 未安装到任何工具
             </div>
           ) : (
-            <div className="space-y-3">
+            <div className="grid gap-2 sm:grid-cols-2">
               {installedTools.map((toolId) => {
                 const tool = AI_TOOL_META[toolId as AiToolType];
                 if (!tool) return null;
@@ -89,7 +89,7 @@ export function RemoveFromToolsDialog({
                 return (
                   <div
                     key={toolId}
-                    className="flex items-center space-x-3 rounded-lg border p-4 hover:bg-accent/50 cursor-pointer transition-colors"
+                    className="flex cursor-pointer items-center gap-3 rounded-[14px] border border-border/70 bg-background/72 px-3 py-2.5 transition-colors hover:bg-surface-hover"
                     onClick={() => toggleTool(toolId)}
                   >
                     <Checkbox
@@ -97,13 +97,10 @@ export function RemoveFromToolsDialog({
                       onCheckedChange={() => toggleTool(toolId)}
                       onClick={(e) => e.stopPropagation()}
                     />
-                    <div className="flex items-center gap-2 flex-1">
-                      <span className="text-2xl">{tool.icon}</span>
-                      <div>
-                        <div className="font-medium">{tool.displayName}</div>
-                        <div className="text-xs text-muted-foreground">
+                    <div className="min-w-0 flex-1">
+                      <div className="text-sm font-medium">{tool.displayName}</div>
+                      <div className="mt-0.5 truncate text-[11px] text-muted-foreground">
                           ~/.{tool.name === 'claude-code' ? 'claude' : tool.name === 'opencode' ? 'config/opencode' : tool.name === 'antigravity' ? 'gemini/antigravity/global_skills' : tool.name}/skills/
-                        </div>
                       </div>
                     </div>
                   </div>
@@ -113,7 +110,7 @@ export function RemoveFromToolsDialog({
           )}
         </div>
 
-        <DialogFooter>
+        <DialogFooter className="border-t border-border/60 pt-3">
           <Button variant="outline" onClick={() => onOpenChange(false)}>
             取消
           </Button>

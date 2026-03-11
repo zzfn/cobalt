@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Key, Plus, Trash2, Check, Pencil, Globe, Copy, Shield, Eye, EyeOff } from 'lucide-react';
+import { Plus, Trash2, Check, Pencil, Globe, Copy, Shield, Eye, EyeOff } from 'lucide-react';
 import { toast } from 'sonner';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -199,10 +199,7 @@ export default function ApiKeyCard({
     <>
       <Card>
         <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <Key className="h-5 w-5" />
-            API 配置
-          </CardTitle>
+          <CardTitle>API 配置</CardTitle>
           <CardDescription>
             管理多个 API Key 配置，点击卡片可快速切换
           </CardDescription>
@@ -305,14 +302,12 @@ export default function ApiKeyCard({
 
                   {/* API Key 预览 */}
                   <div className="space-y-1.5 text-sm">
-                    <div className="flex items-center gap-2 text-muted-foreground">
-                      <Key className="h-3.5 w-3.5 shrink-0" />
+                    <div className="text-muted-foreground">
                       <span className="font-mono text-xs truncate">
                         {maskApiKey(profile.apiKey)}
                       </span>
                     </div>
-                    <div className="flex items-center gap-2 text-muted-foreground">
-                      <Globe className="h-3.5 w-3.5 shrink-0" />
+                    <div className="text-muted-foreground">
                       <span className="font-mono text-xs truncate">
                         {extractDomain(profile.baseUrl)}
                       </span>

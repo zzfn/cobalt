@@ -8,7 +8,6 @@ import {
   Download,
   CheckCircle2,
   Loader2,
-  Package,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -323,7 +322,6 @@ export default function MarketplaceDetail() {
       ) : !cache || cache.skills.length === 0 ? (
         <Card>
           <CardContent className="flex flex-col items-center justify-center py-12">
-            <Package className="h-12 w-12 text-muted-foreground mb-4" />
             <p className="text-muted-foreground mb-4">该市场源中没有 Skills</p>
             <Button onClick={handleRefresh}>
               <RefreshCw className="h-4 w-4 mr-2" />

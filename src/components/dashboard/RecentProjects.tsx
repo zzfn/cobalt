@@ -1,5 +1,5 @@
 import { Link } from 'react-router-dom';
-import { FolderOpen, Clock } from 'lucide-react';
+import { Clock } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import type { ActivityRecord } from '@/types/dashboard';
 
@@ -67,9 +67,8 @@ export default function RecentProjects({
 
   if (loading) {
     return (
-      <div className={cn('border border-border-strong rounded-lg p-6', className)}>
-        <div className="flex items-center gap-2 mb-4">
-          <FolderOpen className="h-4 w-4 text-muted-foreground/50" strokeWidth={1.5} />
+      <div className={cn('panel-surface p-6', className)}>
+        <div className="mb-4">
           <h2 className="text-sm font-medium">最近项目</h2>
         </div>
         <div className="space-y-3">
@@ -89,23 +88,21 @@ export default function RecentProjects({
   }
 
   return (
-    <div className={cn('border border-border-strong rounded-lg p-6', className)}>
-      <div className="flex items-center gap-2 mb-4">
-        <FolderOpen className="h-4 w-4 text-muted-foreground/50" strokeWidth={1.5} />
+    <div className={cn('panel-surface p-6', className)}>
+      <div className="mb-5">
         <h2 className="text-sm font-medium">最近项目</h2>
       </div>
-      <div className="space-y-0.5">
+      <div className="space-y-1">
         {projects.map((project) => (
           <Link
             key={project.name}
             to="/token-usage"
-            className="flex items-center justify-between py-2 px-2 -mx-2 rounded hover:bg-muted/50 transition-colors group"
+            className="group flex items-center justify-between rounded-[18px] border border-transparent px-3 py-3 transition-colors hover:border-border/70 hover:bg-background/70"
           >
-            <div className="flex items-center gap-2 min-w-0">
-              <FolderOpen className="h-3.5 w-3.5 text-muted-foreground/30 shrink-0" strokeWidth={1.5} />
+            <div className="min-w-0">
               <span className="text-sm truncate">{project.name}</span>
             </div>
-            <div className="flex items-center gap-3 text-xs text-muted-foreground/60 shrink-0">
+            <div className="flex shrink-0 items-center gap-3 text-xs text-muted-foreground/60">
               <span>{project.count} 次对话</span>
               <span className="flex items-center gap-1">
                 <Clock className="h-3 w-3" strokeWidth={1.5} />

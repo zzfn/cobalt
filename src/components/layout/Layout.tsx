@@ -52,14 +52,13 @@ export default function Layout() {
   }, [resolvedTheme]);
 
   return (
-    <div className="flex h-screen overflow-hidden">
+    <div className="flex h-screen overflow-hidden bg-transparent">
       <Sidebar />
-      {/* Figma 风格：内容区使用极浅灰背景与侧边栏区分 */}
-      <main className="flex-1 overflow-y-auto bg-content-area">
-        <div className="container mx-auto p-8">
+      <main className="relative flex-1 overflow-y-auto bg-content-area/35">
+        <div className="relative mx-auto max-w-[1440px] p-4 md:p-6 xl:p-8">
           <ErrorBoundary>
             <Suspense fallback={
-              <div className="flex items-center justify-center min-h-[400px]">
+              <div className="panel-surface flex min-h-[420px] items-center justify-center">
                 <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
               </div>
             }>

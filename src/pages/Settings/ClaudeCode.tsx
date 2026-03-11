@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Key, Save, RefreshCw, AlertTriangle, Trash2 } from 'lucide-react';
+import { Save, RefreshCw, AlertTriangle, Trash2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
@@ -181,12 +181,9 @@ export default function ClaudeCodeSettings() {
     <div className="space-y-6">
       {/* 页面标题 */}
       <div className="flex items-center justify-between">
-        <div className="flex items-center gap-3">
-          <Key className="h-8 w-8" />
-          <div>
-            <h1 className="text-2xl font-bold">API Key</h1>
-            <p className="text-muted-foreground">管理 API Key 配置</p>
-          </div>
+        <div>
+          <h1 className="text-2xl font-bold">API Key</h1>
+          <p className="text-muted-foreground">管理 API Key 配置</p>
         </div>
         <div className="flex items-center gap-2">
           <Button variant="outline" size="sm" onClick={loadConfig}>

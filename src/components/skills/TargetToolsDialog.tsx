@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { CheckCircle2, FolderTree } from 'lucide-react';
 import {
   Dialog,
   DialogContent,
@@ -91,32 +92,36 @@ export function TargetToolsDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-[500px]">
-        <DialogHeader>
-          <DialogTitle>选择安装目标工具</DialogTitle>
+      <DialogContent className="sm:max-w-[540px]">
+        <DialogHeader className="space-y-2">
+          <DialogTitle className="text-base">选择安装目标工具</DialogTitle>
           <DialogDescription>
             {skillName ? `选择要将 "${skillName}" 安装到哪些 AI 工具` : '选择要安装到哪些 AI 工具'}
           </DialogDescription>
         </DialogHeader>
 
-        <div className="space-y-4 py-4">
+        <div className="space-y-3 py-1">
           {workspacePath && (
-            <div className="text-sm text-muted-foreground bg-blue-50 dark:bg-blue-950/20 p-3 rounded-md border border-blue-200 dark:border-blue-800">
-              📁 当前安装到项目：<span className="font-medium">{workspaceName || workspacePath}</span>
+            <div className="flex items-start gap-2 rounded-[14px] border border-border/70 bg-muted/30 px-3 py-2 text-sm text-muted-foreground">
+              <FolderTree className="mt-0.5 h-4 w-4 shrink-0 text-foreground/65" />
+              <div className="min-w-0">
+                <p className="font-medium text-foreground/80">当前项目</p>
+                <p className="mt-0.5 truncate text-xs">{workspaceName || workspacePath}</p>
+              </div>
             </div>
           )}
 
           {availableTools.length === 0 ? (
-            <div className="text-center py-8 text-muted-foreground">
+            <div className="rounded-[14px] border border-border/70 bg-muted/20 py-7 text-center text-sm text-muted-foreground">
               该 Skill 已安装到所有支持的工具
             </div>
           ) : (
             <>
-              <div className="space-y-3">
+              <div className="grid gap-2 sm:grid-cols-2">
                 {availableTools.map((tool) => (
                   <div
                     key={tool.id}
-                    className="flex items-center space-x-3 rounded-lg border p-4 hover:bg-accent/50 cursor-pointer transition-colors"
+                    className="flex cursor-pointer items-center gap-3 rounded-[14px] border border-border/70 bg-background/72 px-3 py-2.5 transition-colors hover:bg-surface-hover"
                     onClick={() => toggleTool(tool.id)}
                   >
                     <Checkbox
@@ -124,35 +129,38 @@ export function TargetToolsDialog({
                       onCheckedChange={() => toggleTool(tool.id)}
                       onClick={(e) => e.stopPropagation()}
                     />
-                    <div className="flex items-center gap-2 flex-1">
-                      <span className="text-2xl">{tool.icon}</span>
-                      <div>
-                        <div className="font-medium">{tool.displayName}</div>
-                        <div className="text-xs text-muted-foreground">
+                    <div className="min-w-0 flex-1">
+                      <div className="text-sm font-medium">{tool.displayName}</div>
+                      <div className="mt-0.5 truncate text-[11px] text-muted-foreground">
                           {getInstallPath(tool.relativePath)}
-                        </div>
                       </div>
                     </div>
                   </div>
                 ))}
-          </div>
+              </div>
 
-          {defaultTools.length > 0 && (
-            <div className="text-sm text-muted-foreground bg-muted/50 p-3 rounded-md">
-              💡 提示：该 Skill 推荐安装到 {defaultTools.map(t => toolsInfo.find(info => info.id === t)?.displayName || t).join(', ')}
-            </div>
-          )}
+              {defaultTools.length > 0 && (
+                <div className="flex items-start gap-2 rounded-[14px] border border-border/70 bg-muted/20 px-3 py-2 text-sm text-muted-foreground">
+                  <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-foreground/65" />
+                  <div className="min-w-0">
+                    <p className="text-xs font-medium uppercase tracking-[0.16em] text-foreground/70">推荐目标</p>
+                    <p className="mt-1 text-xs leading-5">
+                      {defaultTools.map(t => toolsInfo.find(info => info.id === t)?.displayName || t).join('、')}
+                    </p>
+                  </div>
+                </div>
+              )}
 
-          {excludeTools.length > 0 && (
-            <div className="text-sm text-muted-foreground bg-muted/50 p-3 rounded-md">
-              ℹ️ 已安装到：{excludeTools.map(t => toolsInfo.find(info => info.id === t)?.displayName || t).join(', ')}
-            </div>
+              {excludeTools.length > 0 && (
+                <div className="rounded-[14px] border border-border/70 bg-background/70 px-3 py-2 text-xs text-muted-foreground">
+                  已安装到：{excludeTools.map(t => toolsInfo.find(info => info.id === t)?.displayName || t).join('、')}
+                </div>
+              )}
+            </>
           )}
-          </>
-        )}
         </div>
 
-        <DialogFooter>
+        <DialogFooter className="border-t border-border/60 pt-3">
           <Button variant="outline" onClick={() => onOpenChange(false)}>
             取消
           </Button>

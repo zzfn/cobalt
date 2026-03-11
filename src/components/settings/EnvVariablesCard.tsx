@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Variable, Plus, Trash2, Eye, EyeOff } from 'lucide-react';
+import { Plus, Trash2, Eye, EyeOff } from 'lucide-react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -59,10 +59,7 @@ export default function EnvVariablesCard({ env, onChange }: EnvVariablesCardProp
   return (
     <Card>
       <CardHeader>
-        <CardTitle className="flex items-center gap-2">
-          <Variable className="h-5 w-5" />
-          环境变量
-        </CardTitle>
+        <CardTitle>环境变量</CardTitle>
         <CardDescription>配置 Claude Code 运行时的环境变量</CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">

@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Shield, Plus, X } from 'lucide-react';
+import { Plus, X } from 'lucide-react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -57,10 +57,7 @@ export default function PermissionsCard({
   return (
     <Card>
       <CardHeader>
-        <CardTitle className="flex items-center gap-2">
-          <Shield className="h-5 w-5" />
-          权限管理
-        </CardTitle>
+        <CardTitle>权限管理</CardTitle>
         <CardDescription>
           配置 Claude Code 的工具权限，格式如 Bash(npm run *)
         </CardDescription>

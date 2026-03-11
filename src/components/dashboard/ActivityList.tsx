@@ -1,7 +1,7 @@
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Button } from '@/components/ui/button';
-import { History, Trash2 } from 'lucide-react';
+import { Trash2 } from 'lucide-react';
 import ActivityItem from './ActivityItem';
 import type { ActivityRecord } from '@/types/dashboard';
 
@@ -19,14 +19,11 @@ export default function ActivityList({
   loading = false,
 }: ActivityListProps) {
   return (
-    <Card className="border border-border-strong">
-      <CardHeader className="flex flex-row items-center justify-between pb-3">
-        <div className="flex items-center gap-2">
-          <History className="h-4 w-4 text-muted-foreground/50" strokeWidth={1.5} />
-          <div>
-            <CardTitle className="text-sm font-medium">最近对话</CardTitle>
-            <CardDescription className="text-xs">Claude Code 使用记录</CardDescription>
-          </div>
+    <Card className="border-border/70">
+      <CardHeader className="flex flex-row items-center justify-between pb-2">
+        <div>
+          <CardTitle className="text-sm font-medium">最近对话</CardTitle>
+          <CardDescription className="text-xs">最近 20 条 Claude Code 使用记录</CardDescription>
         </div>
         {activities.length > 0 && onClear && (
           <Button
@@ -41,7 +38,7 @@ export default function ActivityList({
       </CardHeader>
       <CardContent className="pt-0">
         {loading ? (
-          <div className="space-y-3">
+          <div className="space-y-2">
             {Array.from({ length: 4 }).map((_, i) => (
               <div key={i} className="flex items-start gap-3">
                 <div className="h-3.5 w-3.5 animate-pulse rounded-full bg-muted/50 mt-0.5" />
@@ -53,8 +50,7 @@ export default function ActivityList({
             ))}
           </div>
         ) : activities.length === 0 ? (
-          <div className="flex flex-col items-center justify-center py-10 text-center text-muted-foreground/50">
-            <History className="h-6 w-6 mb-2" strokeWidth={1.5} />
+          <div className="flex flex-col items-center justify-center py-12 text-center text-muted-foreground/50">
             <p className="text-xs">暂无活动记录</p>
           </div>
         ) : (
@@ -62,7 +58,7 @@ export default function ActivityList({
             className="pr-2 [&_[data-radix-scroll-area-scrollbar]]:w-1.5 [&_[data-radix-scroll-area-thumb]]:bg-border/60 hover:[&_[data-radix-scroll-area-thumb]]:bg-border/80"
             style={{ height: maxHeight }}
           >
-            <div className="divide-y divide-border/50">
+            <div className="space-y-1.5">
               {activities.map((activity) => (
                 <ActivityItem key={activity.id} activity={activity} />
               ))}

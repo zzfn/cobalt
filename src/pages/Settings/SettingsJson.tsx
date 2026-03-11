@@ -1,5 +1,5 @@
 import { useEffect, useState, useRef } from 'react';
-import { FileJson, Save, RefreshCw, Copy, Check, AlertCircle } from 'lucide-react';
+import { Save, RefreshCw, Copy, Check, AlertCircle } from 'lucide-react';
 import { toast } from 'sonner';
 import Editor, { OnMount } from '@monaco-editor/react';
 import { useAtomValue } from 'jotai';
@@ -140,12 +140,9 @@ export default function SettingsJsonEditor() {
     <div className="space-y-6">
       {/* 页面标题 */}
       <div className="flex items-center justify-between">
-        <div className="flex items-center gap-3">
-          <FileJson className="h-8 w-8" />
-          <div>
-            <h1 className="text-2xl font-bold">settings.json</h1>
-            <p className="text-muted-foreground">直接编辑 Claude Code 配置文件</p>
-          </div>
+        <div>
+          <h1 className="text-2xl font-bold">settings.json</h1>
+          <p className="text-muted-foreground">直接编辑 Claude Code 配置文件</p>
         </div>
         <div className="flex items-center gap-2">
           <Button variant="outline" size="sm" onClick={loadConfig}>

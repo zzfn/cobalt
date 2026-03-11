@@ -9,7 +9,6 @@ import {
   Settings,
   FileText,
   Sparkles,
-  ChevronLeft,
   ChevronRight,
   Sun,
   Moon,
@@ -20,6 +19,7 @@ import {
   Terminal,
   BarChart3,
   HardDrive,
+  PanelLeftClose,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
@@ -122,20 +122,20 @@ export default function Sidebar() {
         <Link
           to={hasChildren ? item.children![0].href : item.href}
           className={cn(
-            // Figma 风格：简洁布局，充足内边距
-            'flex items-center gap-3 px-3 py-2 text-sm transition-colors rounded-sm',
-            // 默认状态：透明背景
-            'bg-sidebar-item text-foreground',
-            // 悬停状态：极浅灰
-            'hover:bg-sidebar-item-hover',
-            // 选中状态：克制的背景色
-            isActive && 'bg-sidebar-item-active',
-            collapsed && 'justify-center px-2',
-            depth > 0 && !collapsed && 'ml-4'
+            'flex items-center gap-3 rounded-[16px] px-3 py-2.5 text-sm transition-all duration-200',
+            'bg-sidebar-item text-foreground/80',
+            'hover:bg-sidebar-item-hover hover:text-foreground',
+            isActive && 'bg-sidebar-item-active text-foreground shadow-[0_12px_30px_-24px_rgba(25,39,52,0.7)]',
+            collapsed && 'justify-center px-2.5',
+            depth > 0 && !collapsed && 'ml-4 text-[13px]'
           )}
         >
-          <item.icon className={cn('h-4 w-4 shrink-0', collapsed && 'h-5 w-5')} />
-          {!collapsed && <span className="font-medium">{item.title}</span>}
+          <item.icon className={cn('h-4 w-4 shrink-0', collapsed && 'h-[18px] w-[18px]')} />
+          {!collapsed && (
+            <span className={cn('font-medium tracking-[-0.02em]', isActive && 'translate-x-0.5')}>
+              {item.title}
+            </span>
+          )}
         </Link>
         {hasChildren && isExpanded && !collapsed && (
           <div className="mt-0.5 space-y-0.5">
@@ -149,56 +149,62 @@ export default function Sidebar() {
   return (
     <aside
       className={cn(
-        // Figma 风格：纯白/深色背景，细线右边框
-        'flex h-screen flex-col bg-sidebar border-r border-sidebar-border',
-        'transition-all duration-200 ease-in-out',
-        collapsed ? 'w-16' : 'w-60'
+        'relative m-3 flex h-[calc(100vh-24px)] flex-col rounded-[28px] border border-sidebar-border/80 bg-sidebar/88 shadow-[0_24px_70px_-34px_rgba(25,39,52,0.4)] backdrop-blur-xl',
+        'transition-all duration-300 ease-out',
+        collapsed ? 'w-[88px]' : 'w-[292px]'
       )}
     >
-      {/* Logo 区域 - 极简设计 */}
       <div className={cn(
-        'flex h-12 items-center border-b border-sidebar-border px-4',
-        collapsed && 'justify-center px-2'
+        'flex h-20 items-center border-b border-sidebar-border/70 px-5',
+        collapsed && 'justify-center px-3'
       )}>
         {!collapsed ? (
-          <span className="text-sm font-semibold tracking-tight">Cobalt</span>
+          <div className="min-w-0">
+            <div className="flex items-center gap-3">
+              <div className="flex h-11 w-11 items-center justify-center rounded-[18px] bg-primary text-sm font-semibold text-white shadow-[0_14px_30px_-16px_hsl(var(--primary)/0.9)]">
+                Co
+              </div>
+              <div className="min-w-0">
+                <span className="block text-[15px] font-semibold tracking-[-0.03em]">Cobalt</span>
+                <span className="block text-xs text-muted-foreground">AI Workspace Console</span>
+              </div>
+            </div>
+          </div>
         ) : (
-          <span className="text-sm font-bold tracking-tight">C</span>
+          <div className="flex h-11 w-11 items-center justify-center rounded-[18px] bg-primary text-sm font-semibold text-white shadow-[0_14px_30px_-16px_hsl(var(--primary)/0.9)]">
+            C
+          </div>
         )}
       </div>
 
-      {/* 工作区选择器 */}
       <div className={cn(
-        'border-b border-sidebar-border px-2 py-2',
-        collapsed && 'flex justify-center py-2'
+        'border-b border-sidebar-border/70 px-3 py-3',
+        collapsed && 'flex justify-center py-3'
       )}>
         <WorkspaceSelector collapsed={collapsed} />
       </div>
 
-      {/* 导航区域 */}
-      <nav className="flex-1 overflow-y-auto px-2 py-3 space-y-0.5">
+      <nav className="flex-1 space-y-4 overflow-y-auto px-3 py-4">
         {navGroups.map((group, index) => (
           <div key={index}>
             {group.items.map((item) => renderNavItem(item))}
             {index < navGroups.length - 1 && (
-              <Separator className="my-3 bg-sidebar-border/50" />
+              <Separator className="my-4 bg-sidebar-border/60" />
             )}
           </div>
         ))}
       </nav>
 
-      {/* 底部操作区域 */}
       <div className={cn(
-        'border-t border-sidebar-border p-2 space-y-0.5',
+        'border-t border-sidebar-border/70 p-3 space-y-1.5',
         collapsed && 'flex flex-col items-center'
       )}>
-        {/* 主题切换 - 极简按钮样式 */}
         <Button
           variant="ghost"
           size={collapsed ? 'icon' : 'sm'}
           onClick={toggleTheme}
           className={cn(
-            'h-9 rounded-sm hover:bg-sidebar-item-hover',
+            'h-10 justify-start rounded-[16px] hover:bg-sidebar-item-hover',
             collapsed && 'w-10 h-10'
           )}
         >
@@ -214,13 +220,12 @@ export default function Sidebar() {
           )}
         </Button>
 
-        {/* 折叠按钮 */}
         <Button
           variant="ghost"
           size={collapsed ? 'icon' : 'sm'}
           onClick={() => setCollapsed(!collapsed)}
           className={cn(
-            'h-9 rounded-sm hover:bg-sidebar-item-hover',
+            'h-10 justify-start rounded-[16px] hover:bg-sidebar-item-hover',
             collapsed && 'w-10 h-10'
           )}
         >
@@ -228,22 +233,23 @@ export default function Sidebar() {
             <ChevronRight className="h-4 w-4" />
           ) : (
             <>
-              <ChevronLeft className="h-4 w-4" />
-              <span className="ml-2 text-sm">收起</span>
+              <PanelLeftClose className="h-4 w-4" />
+              <span className="ml-2 text-sm">收起侧栏</span>
             </>
           )}
         </Button>
 
-        {/* 版本号和检查更新 */}
         {version && (
           <div className={cn(
-            'flex items-center gap-2 text-xs text-muted-foreground pt-1.5 pb-0.5',
-            collapsed ? 'flex-col px-0 gap-1' : 'justify-between px-3'
+            'flex items-center gap-2 text-muted-foreground/70',
+            collapsed ? 'flex-col gap-1 px-0 py-1.5' : 'justify-between px-1 py-1'
           )}>
-            <div className="flex flex-col gap-0.5">
-              <span className="font-medium">{collapsed ? `v${version.split('.')[0]}` : `v${version}`}</span>
+            <div className="flex min-w-0 flex-col gap-0.5 leading-none">
+              <span className="text-[11px] font-medium text-foreground/75">
+                {collapsed ? `v${version.split('.')[0]}` : `Cobalt v${version}`}
+              </span>
               {!collapsed && (
-                <span className="text-muted-foreground/70">
+                <span className="truncate text-[10px] text-muted-foreground/65">
                   {ccVersion ? `CC ${ccVersion}` : 'CC --'}
                 </span>
               )}
@@ -251,7 +257,7 @@ export default function Sidebar() {
             <Button
               variant="ghost"
               size="icon"
-              className="h-6 w-6 rounded-sm hover:bg-sidebar-item-hover"
+              className="h-6 w-6 rounded-[8px] hover:bg-sidebar-item-hover"
               onClick={async () => {
                 const update = await checkForUpdate(version);
                 if (update) {

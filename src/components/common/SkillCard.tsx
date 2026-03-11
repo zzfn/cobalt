@@ -1,5 +1,5 @@
 import { Link } from 'react-router-dom';
-import { Sparkles, ExternalLink, Trash2, Database } from 'lucide-react';
+import { ExternalLink, Trash2 } from 'lucide-react';
 import { openUrl } from '@tauri-apps/plugin-opener';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -29,12 +29,17 @@ interface SkillCardProps {
 }
 
 export default function SkillCard({ skill, onToggle, onDelete, className, sourceName }: SkillCardProps) {
+  const isCobaltManaged = Boolean(
+    skill.metadata.sourceId ||
+    skill.metadata.repository ||
+    (skill.installedBy && skill.installedBy.length > 0)
+  );
+
   return (
-    <Card className={cn('group relative transition-shadow hover:shadow-md', className)}>
+    <Card className={cn('group relative h-full border-border/70 bg-card/88 transition-all duration-200 hover:-translate-y-1 hover:border-primary/25 hover:shadow-[0_24px_60px_-34px_rgba(25,39,52,0.45)]', className)}>
       <CardHeader className="pb-3">
         <div className="flex items-start justify-between">
-          <div className="flex items-center gap-2">
-            <Sparkles className="h-5 w-5 text-muted-foreground" />
+          <div className="flex items-center gap-3">
             <CardTitle className="text-base">
               <Link
                 to={`/skills/${skill.name}`}
@@ -82,21 +87,24 @@ export default function SkillCard({ skill, onToggle, onDelete, className, source
           <div className="flex flex-wrap items-center gap-2">
             {skill.metadata.sourceId && sourceName && (
               <Badge variant="secondary" className="text-xs">
-                <Database className="mr-1 h-3 w-3" />
                 来自 {sourceName}
               </Badge>
             )}
+            {!isCobaltManaged && (
+              <Badge variant="outline" className="text-xs">
+                非 Cobalt 安装
+              </Badge>
+            )}
             {skill.installedBy && skill.installedBy.length > 0 && (
-              <div className="inline-flex flex-wrap items-center gap-1.5 rounded-md border border-border/70 bg-muted/35 px-2 py-1 text-xs text-muted-foreground">
+              <div className="inline-flex flex-wrap items-center gap-1.5 rounded-[14px] border border-border/70 bg-muted/35 px-2.5 py-1.5 text-xs text-muted-foreground">
                 <span className="font-medium text-foreground/80">安装自</span>
                 {skill.installedBy.map((tool) => {
                   const toolMeta = AI_TOOL_META[tool as keyof typeof AI_TOOL_META];
                   return (
                     <span
                       key={tool}
-                      className="inline-flex items-center gap-1 rounded border border-border/70 bg-background px-1.5 py-0.5 text-[11px] text-foreground/90"
+                      className="inline-flex items-center gap-1 rounded-full border border-border/70 bg-background px-2 py-0.5 text-[11px] text-foreground/90"
                     >
-                      <span>{toolMeta?.icon ?? '•'}</span>
                       <span>{toolMeta?.displayName ?? tool}</span>
                     </span>
                   );
@@ -115,7 +123,7 @@ export default function SkillCard({ skill, onToggle, onDelete, className, source
                   className="text-xs"
                   title={`适用于 ${toolMeta.displayName}`}
                 >
-                  {toolMeta.icon} {toolMeta.displayName}
+                  {toolMeta.displayName}
                 </Badge>
               );
             })}
@@ -129,7 +137,7 @@ export default function SkillCard({ skill, onToggle, onDelete, className, source
         {skill.url && (
           <button
             type="button"
-            className="mt-2 inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground"
+            className="mt-3 inline-flex items-center gap-1 text-xs text-muted-foreground transition-colors hover:text-foreground"
             onClick={(e) => { e.stopPropagation(); openUrl(toBrowsableRepoUrl(skill.url!)); }}
           >
             <ExternalLink className="h-3 w-3" />

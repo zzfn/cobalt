@@ -1,6 +1,6 @@
 import { useAtom } from 'jotai';
 import { useEffect, useState } from 'react';
-import { Settings, Sun, Moon, Monitor, RefreshCw } from 'lucide-react';
+import { RefreshCw } from 'lucide-react';
 import { getVersion } from '@tauri-apps/api/app';
 import { toast } from 'sonner';
 import { useAppUpdate } from '@/hooks/useAppUpdate';
@@ -22,19 +22,16 @@ export default function GeneralSettings() {
   }, []);
 
   const themeOptions = [
-    { value: 'light' as const, label: '浅色', icon: Sun },
-    { value: 'dark' as const, label: '深色', icon: Moon },
-    { value: 'system' as const, label: '跟随系统', icon: Monitor },
+    { value: 'light' as const, label: '浅色' },
+    { value: 'dark' as const, label: '深色' },
+    { value: 'system' as const, label: '跟随系统' },
   ];
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center gap-3">
-        <Settings className="h-8 w-8" />
-        <div>
-          <h1 className="text-2xl font-bold">通用设置</h1>
-          <p className="text-muted-foreground">配置应用的基本设置</p>
-        </div>
+      <div>
+        <h1 className="text-2xl font-bold">通用设置</h1>
+        <p className="text-muted-foreground">配置应用的基本设置</p>
       </div>
 
       <Card>
@@ -51,7 +48,6 @@ export default function GeneralSettings() {
                 onClick={() => setTheme(option.value)}
                 className="flex items-center gap-2"
               >
-                <option.icon className="h-4 w-4" />
                 {option.label}
               </Button>
             ))}

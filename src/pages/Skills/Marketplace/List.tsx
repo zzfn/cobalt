@@ -3,7 +3,6 @@ import { useAtom, useSetAtom } from 'jotai';
 import { useNavigate } from 'react-router-dom';
 import { openUrl } from '@tauri-apps/plugin-opener';
 import {
-  Database,
   Plus,
   RefreshCw,
   Trash2,
@@ -246,12 +245,9 @@ export default function MarketplaceList() {
     <div className="container mx-auto p-6 space-y-6">
       {/* 页面标题 */}
       <div className="sticky top-0 z-20 -mx-2 flex items-center justify-between border-b bg-content-area/95 px-2 py-3 backdrop-blur supports-[backdrop-filter]:bg-content-area/80">
-        <div className="flex items-center gap-3">
-          <Database className="h-8 w-8 text-primary" />
-          <div>
-            <h1 className="text-3xl font-bold">Skill 市场</h1>
-            <p className="text-muted-foreground">管理 Skill 市场源，浏览和安装 Skills</p>
-          </div>
+        <div>
+          <h1 className="text-3xl font-bold">Skill 市场</h1>
+          <p className="text-muted-foreground">管理 Skill 市场源，浏览和安装 Skills</p>
         </div>
         <div className="flex gap-2">
           <Button
@@ -343,7 +339,6 @@ export default function MarketplaceList() {
       ) : sources.length === 0 ? (
         <Card>
           <CardContent className="flex flex-col items-center justify-center py-12">
-            <Database className="h-12 w-12 text-muted-foreground mb-4" />
             <p className="text-muted-foreground mb-4">还没有添加任何市场源</p>
             <Button onClick={() => setAddDialogOpen(true)}>
               <Plus className="h-4 w-4 mr-2" />

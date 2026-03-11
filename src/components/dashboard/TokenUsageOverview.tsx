@@ -1,5 +1,4 @@
 import { Link } from 'react-router-dom';
-import { Coins, Calendar } from 'lucide-react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
 import { cn } from '@/lib/utils';
@@ -71,40 +70,39 @@ export default function TokenUsageOverview({
 
   return (
     <Link to="/token-usage" className="block">
-      <Card className={cn(className, "hover:border-border transition-colors cursor-pointer")}>
-        <CardHeader className="pb-3">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <Coins className="h-4 w-4 text-muted-foreground/50" strokeWidth={1.5} />
-              <div>
-                <CardTitle className="text-sm font-medium">Token 用量</CardTitle>
-                {lastUpdate && (
-                  <CardDescription className="text-xs flex items-center gap-1">
-                    <Calendar className="h-3 w-3" strokeWidth={1.5} />
-                    更新于 {formatDate(lastUpdate)}
-                  </CardDescription>
-                )}
-              </div>
+      <Card className={cn(className, "h-full cursor-pointer border-border/70 bg-card transition-transform duration-200 hover:-translate-y-0.5 hover:border-primary/30")}>
+        <CardHeader className="pb-2">
+          <div className="flex items-start justify-between gap-3">
+            <div>
+              <CardTitle className="text-sm font-medium">Token 用量</CardTitle>
+              {lastUpdate && (
+                <CardDescription className="text-xs">
+                  更新于 {formatDate(lastUpdate)}
+                </CardDescription>
+              )}
+            </div>
+            <div className="rounded-full bg-accent/10 px-2 py-0.5 text-[10px] font-medium text-accent">
+              Usage
             </div>
           </div>
         </CardHeader>
         <CardContent className="pt-0">
-          <div className="grid grid-cols-3 gap-6">
+          <div className="grid grid-cols-3 gap-3 sm:gap-4">
             <div>
-              <p className="text-2xl font-semibold tracking-tight">{formatNumber(totalTokens)}</p>
-              <p className="text-xs text-muted-foreground/60 mt-1">总 Token</p>
+              <p className="text-2xl font-semibold tracking-[-0.04em] sm:text-[28px]">{formatNumber(totalTokens)}</p>
+              <p className="mt-0.5 text-[11px] text-muted-foreground/70">总 Token</p>
             </div>
             <div>
-              <p className="text-2xl font-semibold tracking-tight">
+              <p className="text-2xl font-semibold tracking-[-0.04em] sm:text-[28px]">
                 {stats?.totalMessages?.toLocaleString() ?? '0'}
               </p>
-              <p className="text-xs text-muted-foreground/60 mt-1">总消息</p>
+              <p className="mt-0.5 text-[11px] text-muted-foreground/70">总消息</p>
             </div>
             <div>
-              <p className="text-2xl font-semibold tracking-tight">
+              <p className="text-2xl font-semibold tracking-[-0.04em] sm:text-[28px]">
                 {stats?.totalSessions?.toLocaleString() ?? '0'}
               </p>
-              <p className="text-xs text-muted-foreground/60 mt-1">总会话</p>
+              <p className="mt-0.5 text-[11px] text-muted-foreground/70">总会话</p>
             </div>
           </div>
         </CardContent>

@@ -44,6 +44,8 @@
   --color-sidebar-item: hsl(var(--sidebar-item));
   --color-sidebar-item-hover: hsl(var(--sidebar-item-hover));
   --color-sidebar-item-active: hsl(var(--sidebar-item-active));
+  --color-surface-hover: hsl(var(--surface-hover));
+  --color-surface-hover-strong: hsl(var(--surface-hover-strong));
   --color-content-area: hsl(var(--content-area));
   --radius-lg: var(--radius);
   --radius-md: calc(var(--radius) - 2px);
@@ -52,114 +54,97 @@
 
 @layer base {
   :root {
-    /* Figma 极简风格 - 浅色模式 */
-    --background: 0 0% 100%; /* #FFFFFF 纯白 */
-    --foreground: 0 0% 8%; /* #141414 近黑色文字 */
+    --background: 210 24% 96%;
+    --foreground: 215 28% 14%;
 
-    /* 卡片与弹出层 */
-    --card: 0 0% 100%; /* #FFFFFF */
-    --card-foreground: 0 0% 8%;
+    --card: 0 0% 100%;
+    --card-foreground: 215 28% 14%;
     --popover: 0 0% 100%;
-    --popover-foreground: 0 0% 8%;
+    --popover-foreground: 215 28% 14%;
 
-    /* 品牌色 - 克制的蓝色 */
-    --primary: 220 80% 50%; /* #3399FF */
+    --primary: 212 50% 40%;
     --primary-foreground: 0 0% 100%;
 
-    /* 次要背景 */
-    --secondary: 0 0% 96%; /* #F5F5F5 */
-    --secondary-foreground: 0 0% 8%;
+    --secondary: 210 20% 92%;
+    --secondary-foreground: 215 28% 14%;
 
-    /* 弱化区域 */
-    --muted: 0 0% 94%; /* #F0F0F0 */
-    --muted-foreground: 0 0% 55%; /* #8C8C8C */
+    --muted: 210 16% 90%;
+    --muted-foreground: 215 14% 42%;
 
-    /* 强调色 */
-    --accent: 220 80% 50%;
+    --accent: 24 52% 47%;
     --accent-foreground: 0 0% 100%;
 
-    /* 侧边栏 - Figma 风格：纯白 + 明显黑边框 */
-    --sidebar: 0 0% 100%; /* 纯白背景 */
-    --sidebar-border: 0 0% 88%; /* 明显黑灰边框 #E0E0E0 - Figma 风格 */
-    --sidebar-item: 0 0% 100%; /* 透明 */
-    --sidebar-item-hover: 0 0% 96%; /* 悬停极浅灰 #F5F5F5 */
-    --sidebar-item-active: 0 0% 92%; /* 选中浅灰 #EBEBEB */
-    --content-area: 0 0% 99%; /* 内容区极浅灰 #FCFCFC */
+    --sidebar: 210 22% 94%;
+    --sidebar-border: 214 14% 82%;
+    --sidebar-item: 0 0% 100% / 0;
+    --sidebar-item-hover: 0 0% 100% / 0.7;
+    --sidebar-item-active: 0 0% 100% / 0.95;
+    --surface-hover: 214 20% 92%;
+    --surface-hover-strong: 214 20% 88%;
+    --content-area: 210 26% 97%;
 
-    /* 危险操作 */
     --destructive: 0 75% 55%;
     --destructive-foreground: 0 0% 100%;
 
-    /* 边框 - Figma 风格：明显的黑色边框 */
-    --border: 0 0% 85%; /* #D9D9D9 - 更明显的黑灰边框 */
-    --border-strong: 0 0% 75%; /* #BFBFBF - 强调黑色边框 */
-    --border-black: 0 0% 20%; /* #333333 - 近黑色边框 */
-    --input: 0 0% 85%;
-    --ring: 220 80% 50%;
+    --border: 214 14% 82%;
+    --border-strong: 214 12% 72%;
+    --border-black: 215 28% 14%;
+    --input: 214 14% 82%;
+    --ring: 212 50% 40%;
 
-    /* 圆角系统 - Figma 适度圆角 */
-    --radius: 6px;
+    --radius: 16px;
 
-    /* 图表配色 */
-    --chart-1: 220 70% 50%;
-    --chart-2: 200 60% 45%;
-    --chart-3: 180 65% 40%;
-    --chart-4: 240 70% 55%;
-    --chart-5: 260 75% 60%;
+    --chart-1: 212 50% 40%;
+    --chart-2: 24 52% 47%;
+    --chart-3: 163 28% 38%;
+    --chart-4: 226 44% 53%;
+    --chart-5: 199 36% 46%;
   }
 
   .dark {
-    /* Figma 极简风格 - 深色模式 */
-    --background: 0 0% 10%; /* #1A1A1A 深灰黑 */
-    --foreground: 0 0% 98%; /* #FAFAFA */
+    --background: 222 22% 9%;
+    --foreground: 210 18% 92%;
 
-    /* 卡片与弹出层 */
-    --card: 0 0% 12%; /* #1F1F1F */
+    --card: 222 18% 12%;
     --card-foreground: 0 0% 98%;
-    --popover: 0 0% 12%;
+    --popover: 222 18% 12%;
     --popover-foreground: 0 0% 98%;
 
-    /* 品牌色 - 稍微提亮以适应深色背景 */
-    --primary: 220 85% 60%;
-    --primary-foreground: 0 0% 10%;
+    --primary: 210 58% 66%;
+    --primary-foreground: 222 22% 9%;
 
-    /* 次要背景 */
-    --secondary: 0 0% 18%; /* #2E2E2E */
-    --secondary-foreground: 0 0% 98%;
+    --secondary: 220 14% 18%;
+    --secondary-foreground: 210 18% 92%;
 
-    /* 弱化区域 */
-    --muted: 0 0% 22%; /* #383838 */
-    --muted-foreground: 0 0% 70%; /* #B3B3B3 */
+    --muted: 221 14% 18%;
+    --muted-foreground: 214 12% 68%;
 
-    /* 强调色 */
-    --accent: 220 85% 60%;
-    --accent-foreground: 0 0% 10%;
+    --accent: 28 58% 58%;
+    --accent-foreground: 222 22% 9%;
 
-    /* 侧边栏深色模式 - 细腻的白灰边框 */
-    --sidebar: 0 0% 12%; /* 深灰背景 */
-    --sidebar-border: 0 0% 22%; /* 细腻白灰边框 #383838 */
-    --sidebar-item: 0 0% 12%;
-    --sidebar-item-hover: 0 0% 18%; /* 悬停状态 */
-    --sidebar-item-active: 0 0% 24%; /* 选中状态 */
-    --content-area: 0 0% 8%; /* 内容区更深 */
+    --sidebar: 222 18% 10%;
+    --sidebar-border: 220 14% 22%;
+    --sidebar-item: 0 0% 100% / 0;
+    --sidebar-item-hover: 0 0% 100% / 0.05;
+    --sidebar-item-active: 0 0% 100% / 0.09;
+    --surface-hover: 220 14% 16%;
+    --surface-hover-strong: 220 14% 19%;
+    --content-area: 222 22% 8%;
 
-    /* 危险操作 */
     --destructive: 0 70% 55%;
     --destructive-foreground: 0 0% 100%;
 
-    /* 边框 - 深色模式下的明显白边框 */
-    --border: 0 0% 25%; /* #404040 - 更明显的白灰边框 */
-    --border-strong: 0 0% 35%; /* #595959 - 强调白色边框 */
-    --border-black: 0 0% 85%; /* #D9D9D9 - 近白色边框 */
-    --input: 0 0% 25%;
-    --ring: 220 85% 60%;
+    --border: 220 14% 22%;
+    --border-strong: 220 12% 30%;
+    --border-black: 210 18% 92%;
+    --input: 220 14% 22%;
+    --ring: 210 58% 66%;
 
-    /* 图表配色 */
-    --chart-1: 220 75% 55%;
-    --chart-2: 200 70% 50%;
-    --chart-3: 180 75% 45%;
-    --chart-4: 240 75% 55%;
-    --chart-5: 260 80% 60%;
+    --chart-1: 210 58% 66%;
+    --chart-2: 28 58% 58%;
+    --chart-3: 164 34% 52%;
+    --chart-4: 225 58% 64%;
+    --chart-5: 196 40% 54%;
   }
 }
 
@@ -172,6 +157,15 @@
   }
   body {
     @apply bg-background text-foreground;
+    min-height: 100vh;
+    font-family:
+      "Avenir Next",
+      "SF Pro Display",
+      "Segoe UI Variable",
+      "PingFang SC",
+      "Hiragino Sans GB",
+      "Microsoft YaHei",
+      sans-serif;
     font-feature-settings:
       "rlig" 1,
       "calt" 1;
@@ -197,6 +191,18 @@
 
 /* Tabs 底部指示器样式 */
 @layer components {
+  .panel-surface {
+    @apply rounded-[24px] border border-border/70 bg-card/88 shadow-[0_18px_60px_-28px_rgba(15,23,42,0.22)] backdrop-blur-xl;
+  }
+
+  .panel-muted {
+    @apply rounded-[20px] border border-border/60 bg-background/72 backdrop-blur-md;
+  }
+
+  .page-hero {
+    @apply relative overflow-hidden rounded-[28px] border border-border/60 bg-card shadow-[0_24px_80px_-36px_rgba(15,23,42,0.28)];
+  }
+
   [data-radix-tabs-trigger][data-state="active"]::after {
     content: "";
     position: absolute;

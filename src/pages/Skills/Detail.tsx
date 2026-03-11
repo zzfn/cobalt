@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useAtomValue } from 'jotai';
-import { useParams, Link, useNavigate } from 'react-router-dom';
-import { ArrowLeft, Sparkles, Loader2, FileText, Trash2, Eye, Code, Tag, Folder, File, ChevronRight, ChevronDown, FolderOpen, RefreshCw, Download, AlertCircle, Share2, X } from 'lucide-react';
+import { useParams, Link } from 'react-router-dom';
+import { ArrowLeft, Loader2, Eye, Code, Folder, File, ChevronRight, ChevronDown, FolderOpen, RefreshCw } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 import {
   Card,
@@ -12,27 +12,14 @@ import {
 } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-// Tabs import removed - not used
 import { Switch } from '@/components/ui/switch';
-import { Separator } from '@/components/ui/separator';
 import { Skeleton } from '@/components/ui/skeleton';
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-  AlertDialogTrigger,
-} from '@/components/ui/alert-dialog';
 import MarkdownEditor from '@/components/common/MarkdownEditor';
 import { TargetToolsDialog } from '@/components/skills/TargetToolsDialog';
 import { RemoveFromToolsDialog } from '@/components/skills/RemoveFromToolsDialog';
 import type { SkillDetail as SkillDetailType, SkillUpdateCheckResult } from '@/types/skills';
 import { AI_TOOL_META, type AiToolType } from '@/types/skills';
-import { getSkillDetail, toggleSkill as toggleSkillApi, uninstallSkill, readSkillFile, checkSkillUpdate, updateSkill, setSkillRepository, applySkillToTools, removeSkillFromTools } from '@/services/skills';
+import { getSkillDetail, toggleSkill as toggleSkillApi, readSkillFile, checkSkillUpdate, applySkillToTools, removeSkillFromTools } from '@/services/skills';
 import { currentWorkspaceAtom } from '@/store/workspaceAtoms';
 import { logActivity } from '@/lib/activityLogger';
 import { toast } from 'sonner';
@@ -221,7 +208,6 @@ function FileTreeNode({
 
 export default function SkillDetail() {
   const { skillName } = useParams<{ skillName: string }>();
-  const navigate = useNavigate();
   const currentWorkspace = useAtomValue(currentWorkspaceAtom);
   const [skill, setSkill] = useState<SkillDetailType | null>(null);
   const [loading, setLoading] = useState(true);
@@ -235,12 +221,6 @@ export default function SkillDetail() {
   // 更新检测状态
   const [updateCheck, setUpdateCheck] = useState<SkillUpdateCheckResult | null>(null);
   const [checkingUpdate, setCheckingUpdate] = useState(false);
-  const [updating, setUpdating] = useState(false);
-
-  // 编辑 repository 状态
-  const [isEditingRepo, setIsEditingRepo] = useState(false);
-  const [repoUrl, setRepoUrl] = useState('');
-  const [savingRepo, setSavingRepo] = useState(false);
 
   // 应用到其他工具状态
   const [showApplyDialog, setShowApplyDialog] = useState(false);
@@ -399,20 +379,6 @@ export default function SkillDetail() {
     }
   };
 
-  // 删除 Skill
-  const handleDelete = async () => {
-    if (!skill) return;
-
-    try {
-      await uninstallSkill(skill.name, currentWorkspace?.path ?? null);
-      toast.success(`Skill "${skill.name}" 已删除`);
-      navigate('/skills');
-    } catch (err) {
-      console.error('删除 Skill 失败:', err);
-      toast.error('删除失败', { description: err instanceof Error ? err.message : '未知错误' });
-    }
-  };
-
   // 应用到其他工具
   const handleApplyToTools = async (targetTools: string[]) => {
     if (!skill) return;
@@ -466,51 +432,6 @@ export default function SkillDetail() {
     }
   };
 
-  // 保存仓库地址
-  const handleSaveRepository = async () => {
-    if (!skill || !repoUrl.trim()) return;
-    setSavingRepo(true);
-    try {
-      await setSkillRepository(skill.name, repoUrl.trim(), currentWorkspace?.path ?? null);
-      // 更新本地状态
-      setSkill(prev => prev ? {
-        ...prev,
-        metadata: {
-          ...prev.metadata,
-          repository: repoUrl.trim()
-        }
-      } : null);
-      setIsEditingRepo(false);
-      // 重新检查更新
-      await handleCheckUpdate();
-    } catch (err) {
-      console.error('保存仓库地址失败:', err);
-      toast.error('保存失败', { description: err instanceof Error ? err.message : '未知错误' });
-    } finally {
-      setSavingRepo(false);
-    }
-  };
-
-  // 执行更新
-  const handleUpdate = async () => {
-    if (!skill) return;
-    setUpdating(true);
-    try {
-      const result = await updateSkill(skill.name, currentWorkspace?.path ?? null);
-      toast.success(result);
-      // 重新加载 skill 详情
-      const data = await getSkillDetail(skill.name, currentWorkspace?.path ?? null);
-      setSkill(data);
-      // 重置更新状态
-      setUpdateCheck(null);
-    } catch (err) {
-      console.error('更新失败:', err);
-      toast.error('更新失败', { description: err instanceof Error ? err.message : '未知错误' });
-    } finally {
-      setUpdating(false);
-    }
-  };
-
   if (loading) {
     return (
       <div className="space-y-6 animate-in fade-in duration-300">
@@ -539,8 +460,6 @@ export default function SkillDetail() {
           <Skeleton className="h-6 w-24" />
           <Skeleton className="h-6 w-28" />
         </div>
-
-        <Separator />
 
         {/* 内容卡片骨架 */}
         <Card>
@@ -571,9 +490,6 @@ export default function SkillDetail() {
         </Link>
         <Card className="border-destructive/50 bg-destructive/5">
           <CardContent className="flex flex-col items-center justify-center py-12 text-center">
-            <div className="rounded-full bg-destructive/10 p-4 mb-4">
-              <Sparkles className="h-12 w-12 text-destructive" />
-            </div>
             <h3 className="text-lg font-semibold mb-2">
               {error || `Skill "${skillName}" 不存在`}
             </h3>
@@ -589,410 +505,241 @@ export default function SkillDetail() {
     );
   }
 
+  const isCobaltManaged = Boolean(
+    skill.metadata.sourceId ||
+    skill.metadata.repository ||
+    (skill.installedBy && skill.installedBy.length > 0)
+  );
+  const installedTools = skill.installedBy || [];
+  const distributionSummary = installedTools.length > 0
+    ? `当前已同步到 ${installedTools.length} 个工具`
+    : '当前只存在于本工具目录';
+  const canManageDistribution = Boolean(skill.name);
+
   return (
     <div className="space-y-6 animate-in fade-in duration-300">
-      <div className="sticky top-0 z-20 -mx-2 space-y-4 border-b bg-content-area/95 px-2 py-3 backdrop-blur supports-[backdrop-filter]:bg-content-area/80">
-        {/* 返回按钮 */}
+      <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
         <Link to="/skills">
-          <Button variant="ghost" size="sm" className="gap-2 hover:gap-3 transition-all">
+          <Button variant="ghost" size="sm" className="gap-2">
             <ArrowLeft className="h-4 w-4" />
             返回 Skills 列表
           </Button>
         </Link>
 
-        {/* 标题区域 - 使用渐变背景卡片 */}
-        <Card className="border-primary/20 bg-gradient-to-br from-primary/5 via-background to-background">
-          <CardContent className="pt-6">
-          <div className="flex items-start justify-between gap-4">
-            <div className="flex items-start gap-4 flex-1">
-              <div className="rounded-xl bg-primary/10 p-3 ring-1 ring-primary/20">
-                <Sparkles className="h-8 w-8 text-primary" />
-              </div>
-              <div className="flex-1 min-w-0">
-                <h1 className="text-3xl font-bold tracking-tight mb-2">{displayName}</h1>
-                {displayDescription && (
-                  <p className="text-muted-foreground text-lg leading-relaxed">
-                    {displayDescription}
-                  </p>
-                )}
-
-                {/* 元信息标签 */}
-                <div className="flex flex-wrap items-center gap-2 mt-4">
-                  {skill.installedBy && skill.installedBy.length > 0 && (
-                    <div className="flex items-center gap-2">
-                      <span className="text-sm text-muted-foreground">已安装到：</span>
-                      {skill.installedBy.map((toolId) => {
-                        const tool = AI_TOOL_META[toolId as AiToolType];
-                        return tool ? (
-                          <Badge key={toolId} variant="secondary" className="gap-1.5">
-                            <span>{tool.icon}</span>
-                            {tool.displayName}
-                          </Badge>
-                        ) : null;
-                      })}
-                    </div>
-                  )}
-                  {skill.metadata.tags?.map((tag) => (
-                    <Badge key={tag} variant="outline" className="gap-1.5">
-                      <Tag className="h-3 w-3" />
-                      {tag}
-                    </Badge>
-                  ))}
-                </div>
-              </div>
-            </div>
-
-            {/* 操作区域 */}
-            <div className="flex flex-col items-end gap-3">
-              <div className="flex items-center gap-3 rounded-lg border bg-card p-3 shadow-sm">
-                <div className="flex flex-col items-end gap-1">
-                  <span className="text-sm font-medium">
-                    {skill.enabled ? '已启用' : '已禁用'}
-                  </span>
-                  <span className="text-xs text-muted-foreground">
-                    {skill.enabled ? '正在使用中' : '当前未激活'}
-                  </span>
-                </div>
-                <Switch
-                  checked={skill.enabled}
-                  onCheckedChange={handleToggle}
-                  className="data-[state=checked]:bg-primary"
-                />
-              </div>
-
-              {/* 更新检测区域 */}
-              <div className="flex flex-col items-end gap-2">
-                {/* 没有仓库信息的提示 */}
-                {updateCheck && !updateCheck.hasRepository ? (
-                  <div className="flex flex-col items-end gap-2 max-w-[320px]">
-                    <div className="flex items-center gap-1.5 text-amber-500 text-sm">
-                      <AlertCircle className="h-4 w-4" />
-                      <span>未配置仓库信息</span>
-                    </div>
-                    {isEditingRepo ? (
-                      <div className="flex flex-col items-end gap-2 w-full">
-                        <input
-                          type="text"
-                          placeholder="https://github.com/username/repo"
-                          value={repoUrl}
-                          onChange={(e) => setRepoUrl(e.target.value)}
-                          className="w-full px-2 py-1.5 text-sm border rounded-md bg-background"
-                        />
-                        <div className="flex gap-2">
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => setIsEditingRepo(false)}
-                          >
-                            取消
-                          </Button>
-                          <Button
-                            size="sm"
-                            onClick={handleSaveRepository}
-                            disabled={savingRepo || !repoUrl.trim()}
-                          >
-                            {savingRepo ? (
-                              <Loader2 className="h-4 w-4 animate-spin" />
-                            ) : (
-                              '保存'
-                            )}
-                          </Button>
-                        </div>
-                      </div>
-                    ) : (
-                      <>
-                        <p className="text-xs text-muted-foreground text-right">
-                          配置仓库地址以启用更新检测
-                        </p>
-                        <div className="flex gap-2">
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            className="gap-2"
-                            onClick={() => {
-                              setRepoUrl(skill.metadata?.repository || '');
-                              setIsEditingRepo(true);
-                            }}
-                          >
-                            配置仓库地址
-                          </Button>
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            className="gap-2"
-                            onClick={handleCheckUpdate}
-                            disabled={checkingUpdate}
-                          >
-                            {checkingUpdate ? (
-                              <Loader2 className="h-4 w-4 animate-spin" />
-                            ) : (
-                              <RefreshCw className="h-4 w-4" />
-                            )}
-                            重新检查
-                          </Button>
-                        </div>
-                      </>
-                    )}
-                  </div>
-                ) : updateCheck?.hasUpdate ? (
-                  <div className="flex flex-col items-end gap-2">
-                    <Badge variant="default" className="gap-1.5 bg-green-500/10 text-green-500 border-green-500/20">
-                      <Download className="h-3 w-3" />
-                      有新版本可用
-                      {updateCheck.latestVersion && ` (${updateCheck.latestVersion})`}
-                    </Badge>
-                    {/* 显示文件变更摘要 */}
-                    {(updateCheck.changedFiles?.length || 0) > 0 && (
-                      <span className="text-xs text-muted-foreground">
-                        {updateCheck.changedFiles!.length} 个文件变更
-                      </span>
-                    )}
-                    {(updateCheck.newFiles?.length || 0) > 0 && (
-                      <span className="text-xs text-muted-foreground">
-                        {updateCheck.newFiles!.length} 个新文件
-                      </span>
-                    )}
-                    <Button
-                      size="sm"
-                      className="gap-2"
-                      onClick={handleUpdate}
-                      disabled={updating}
-                    >
-                      {updating ? (
-                        <Loader2 className="h-4 w-4 animate-spin" />
-                      ) : (
-                        <Download className="h-4 w-4" />
-                      )}
-                      {updating ? '更新中...' : '立即更新'}
-                    </Button>
-                  </div>
-                ) : updateCheck?.error ? (
-                  <div className="flex flex-col items-end gap-2">
-                    <Badge variant="destructive" className="gap-1.5">
-                      <AlertCircle className="h-3 w-3" />
-                      检查失败
-                    </Badge>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      className="gap-2"
-                      onClick={handleCheckUpdate}
-                      disabled={checkingUpdate}
-                    >
-                      {checkingUpdate ? (
-                        <Loader2 className="h-4 w-4 animate-spin" />
-                      ) : (
-                        <RefreshCw className="h-4 w-4" />
-                      )}
-                      重试
-                    </Button>
-                  </div>
-                ) : (
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    className="gap-2"
-                    onClick={handleCheckUpdate}
-                    disabled={checkingUpdate}
-                  >
-                    {checkingUpdate ? (
-                      <Loader2 className="h-4 w-4 animate-spin" />
-                    ) : updateCheck ? (
-                      <RefreshCw className="h-4 w-4" />
-                    ) : (
-                      <RefreshCw className="h-4 w-4" />
-                    )}
-                    {checkingUpdate ? '检查中...' : updateCheck ? '已是最新' : '检查更新'}
-                  </Button>
-                )}
-              </div>
-
-              <Button
-                variant="outline"
-                size="sm"
-                className="gap-2 w-full"
-                onClick={() => setShowApplyDialog(true)}
-                disabled={applying}
-              >
-                {applying ? (
-                  <Loader2 className="h-4 w-4 animate-spin" />
-                ) : (
-                  <Share2 className="h-4 w-4" />
-                )}
-                应用到其他工具
-              </Button>
-
-              {skill.installedBy && skill.installedBy.length > 0 && (
-                <Button
-                  variant="outline"
-                  size="sm"
-                  className="gap-2 w-full"
-                  onClick={() => setShowRemoveDialog(true)}
-                  disabled={removing}
-                >
-                  {removing ? (
-                    <Loader2 className="h-4 w-4 animate-spin" />
-                  ) : (
-                    <X className="h-4 w-4" />
-                  )}
-                  从工具中移除
-                </Button>
-              )}
-
-              <AlertDialog>
-                <AlertDialogTrigger asChild>
-                  <Button variant="destructive" size="sm" className="gap-2 w-full">
-                    <Trash2 className="h-4 w-4" />
-                    删除 Skill
-                  </Button>
-                </AlertDialogTrigger>
-                <AlertDialogContent>
-                  <AlertDialogHeader>
-                    <AlertDialogTitle>确认删除</AlertDialogTitle>
-                    <AlertDialogDescription>
-                      确定要删除 Skill "{skill.name}" 吗？此操作无法撤销。
-                    </AlertDialogDescription>
-                  </AlertDialogHeader>
-                  <AlertDialogFooter>
-                    <AlertDialogCancel>取消</AlertDialogCancel>
-                    <AlertDialogAction
-                      onClick={handleDelete}
-                      className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-                    >
-                      删除
-                    </AlertDialogAction>
-                  </AlertDialogFooter>
-                </AlertDialogContent>
-              </AlertDialog>
-            </div>
-          </div>
-          </CardContent>
-        </Card>
+        <div className="flex flex-wrap items-center gap-2">
+          <Button variant="outline" size="sm" onClick={handleCheckUpdate} disabled={checkingUpdate}>
+            {checkingUpdate ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
+            <span className="ml-2">
+              {checkingUpdate ? '检查中...' : updateCheck?.hasUpdate ? '发现更新' : updateCheck ? '已检查' : '检查更新'}
+            </span>
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => setShowApplyDialog(true)}
+            disabled={applying || !canManageDistribution}
+          >
+            {applying ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
+            <span className={applying ? 'ml-2' : ''}>添加到其他工具</span>
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => setShowRemoveDialog(true)}
+            disabled={removing || installedTools.length === 0}
+          >
+            {removing ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
+            <span className={removing ? 'ml-2' : ''}>移除已安装工具</span>
+          </Button>
+        </div>
       </div>
 
-      {/* 内容区域 */}
-      <div className="grid grid-cols-1 lg:grid-cols-[280px_1fr] gap-6">
-        {/* 左侧文件目录 */}
-        {skill.files && skill.files.length > 0 && (
-          <Card className="h-fit sticky top-6">
-            <CardHeader className="border-b bg-muted/30">
-              <div className="flex items-center gap-2">
-                <div className="rounded-lg bg-primary/10 p-2">
-                  <Folder className="h-4 w-4 text-primary" />
+      <div className="space-y-6">
+          <Card className="border-primary/15">
+            <CardContent className="space-y-5 pt-6">
+              <div className="space-y-3">
+                <div className="flex flex-wrap items-center gap-2">
+                  {!isCobaltManaged && <Badge variant="outline">非 Cobalt 安装</Badge>}
+                  {skill.metadata.sourceId && <Badge variant="secondary">市场安装</Badge>}
+                  {skill.metadata.version && <Badge variant="outline">v{skill.metadata.version}</Badge>}
                 </div>
                 <div>
+                  <h1 className="text-3xl font-semibold tracking-[-0.04em]">{displayName}</h1>
+                  {displayDescription && (
+                    <p className="mt-2 max-w-3xl text-sm leading-7 text-muted-foreground">
+                      {displayDescription}
+                    </p>
+                  )}
+                </div>
+              </div>
+
+              {!isCobaltManaged && (
+                <div className="rounded-[18px] border border-amber-500/20 bg-amber-500/8 px-4 py-3">
+                  <p className="text-sm font-medium text-amber-600 dark:text-amber-400">
+                    不是通过 Cobalt 安装的 Skill
+                  </p>
+                  <p className="mt-1 text-xs leading-6 text-muted-foreground">
+                    这个 Skill 缺少 Cobalt 的安装记录和来源信息，所以来源展示、更新检测等依赖元数据的功能可能不可用。
+                  </p>
+                </div>
+              )}
+
+              <div className="grid gap-3 md:grid-cols-3">
+                <div className="panel-muted px-4 py-3">
+                  <p className="text-[11px] uppercase tracking-[0.18em] text-muted-foreground/70">状态</p>
+                  <div className="mt-2 flex items-center justify-between gap-3">
+                    <div>
+                      <p className="text-sm font-medium">{skill.enabled ? '已启用' : '已禁用'}</p>
+                      <p className="mt-1 text-xs text-muted-foreground">
+                        {skill.enabled ? '当前可被调用' : '当前不会被调用'}
+                      </p>
+                    </div>
+                    <Switch
+                      checked={skill.enabled}
+                      onCheckedChange={handleToggle}
+                      className="data-[state=checked]:bg-primary"
+                    />
+                  </div>
+                </div>
+
+                <div className="panel-muted px-4 py-3">
+                  <p className="text-[11px] uppercase tracking-[0.18em] text-muted-foreground/70">来源</p>
+                  <p className="mt-2 text-sm font-medium">
+                    {skill.metadata.sourceId ? '来自 Skill 市场' : skill.metadata.repository ? '已配置仓库地址' : '来源未记录'}
+                  </p>
+                  <p className="mt-1 text-xs text-muted-foreground">
+                    {skill.metadata.sourceId || skill.metadata.repository || '可能是手动放入 skills 目录'}
+                  </p>
+                </div>
+
+                <div className="panel-muted px-4 py-3">
+                  <p className="text-[11px] uppercase tracking-[0.18em] text-muted-foreground/70">分发</p>
+                  <p className="mt-2 text-sm font-medium">{distributionSummary}</p>
+                  <div className="mt-2 flex flex-wrap gap-1.5">
+                    {installedTools.length > 0 ? installedTools.map((toolId) => {
+                      const tool = AI_TOOL_META[toolId as AiToolType];
+                      return tool ? <Badge key={toolId} variant="outline">{tool.displayName}</Badge> : null;
+                    }) : <span className="text-xs text-muted-foreground">暂无额外工具</span>}
+                  </div>
+                </div>
+              </div>
+
+              {skill.metadata.tags && skill.metadata.tags.length > 0 && (
+                <div className="flex flex-wrap gap-2">
+                  {skill.metadata.tags.map((tag) => (
+                    <Badge key={tag} variant="outline">{tag}</Badge>
+                  ))}
+                </div>
+              )}
+            </CardContent>
+          </Card>
+
+          <div className="grid grid-cols-1 gap-6 lg:grid-cols-[240px_minmax(0,1fr)]">
+        {/* 左侧文件目录 */}
+            {skill.files && skill.files.length > 0 && (
+              <Card className="h-fit">
+                <CardHeader className="pb-3">
                   <CardTitle className="text-base">文件目录</CardTitle>
                   <CardDescription className="text-xs">
                     {skill.files.length} 个文件
                   </CardDescription>
-                </div>
-              </div>
-            </CardHeader>
-            <CardContent className="p-3">
-              <div className="space-y-0.5">
-                {buildFileTree(skill.files).map((node) => (
-                  <FileTreeNode
-                    key={node.path}
-                    node={node}
-                    selectedFile={selectedFile}
-                    onSelect={setSelectedFile}
-                  />
-                ))}
-              </div>
-            </CardContent>
-          </Card>
-        )}
-
-        {/* 右侧内容区域 */}
-        <Card className="overflow-hidden">
-          <CardHeader className="border-b bg-muted/30">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-3">
-                <div className="rounded-lg bg-primary/10 p-2">
-                  <FileText className="h-5 w-5 text-primary" />
-                </div>
-                <div>
-                  <CardTitle className="text-xl">
-                    {selectedFile || 'SKILL.md'}
-                  </CardTitle>
-                  <CardDescription>
-                    {selectedFile && selectedFile !== 'SKILL.md' ? '文件内容' : 'Skill 主文档'}
-                  </CardDescription>
-                </div>
-              </div>
-              {skill.content && (!selectedFile || selectedFile === 'SKILL.md') && (
-                <div className="flex items-center gap-1 rounded-lg border bg-background p-1 shadow-sm">
-                  <Button
-                    variant={viewMode === 'preview' ? 'default' : 'ghost'}
-                    size="sm"
-                    onClick={() => setViewMode('preview')}
-                    className="h-8 gap-1.5 text-xs transition-all"
-                  >
-                    <Eye className="h-3.5 w-3.5" />
-                    预览
-                  </Button>
-                  <Button
-                    variant={viewMode === 'code' ? 'default' : 'ghost'}
-                    size="sm"
-                    onClick={() => setViewMode('code')}
-                    className="h-8 gap-1.5 text-xs transition-all"
-                  >
-                    <Code className="h-3.5 w-3.5" />
-                    源代码
-                  </Button>
-                </div>
-              )}
-            </div>
-          </CardHeader>
-          <CardContent className="p-0">
-            {!selectedFile || selectedFile === 'SKILL.md' ? (
-              // 显示 SKILL.md 内容
-              skill.content ? (
-                <div className="transition-all duration-200">
-                  {(() => {
-                    const { content: contentWithoutFrontmatter } = parseFrontmatter(skill.content);
-                    return viewMode === 'preview' ? (
-                      <div className="markdown-preview p-8">
-                        <ReactMarkdown>
-                          {contentWithoutFrontmatter}
-                        </ReactMarkdown>
-                      </div>
-                    ) : (
-                      <div className="border-t">
-                        <MarkdownEditor value={skill.content} readOnly height="500px" />
-                      </div>
-                    );
-                  })()}
-                </div>
-              ) : (
-                <div className="flex flex-col items-center justify-center py-16 text-center text-muted-foreground">
-                  <div className="rounded-full bg-muted p-4 mb-4">
-                    <FileText className="h-8 w-8" />
+                </CardHeader>
+                <CardContent className="p-3 pt-0">
+                  <div className="space-y-0.5">
+                    {buildFileTree(skill.files).map((node) => (
+                      <FileTreeNode
+                        key={node.path}
+                        node={node}
+                        selectedFile={selectedFile}
+                        onSelect={setSelectedFile}
+                      />
+                    ))}
                   </div>
-                  <p className="text-lg font-medium mb-1">没有 SKILL.md 文件</p>
-                  <p className="text-sm">该 Skill 暂无文档内容</p>
-                </div>
-              )
-            ) : (
-              // 显示选中文件的内容
-              loadingFile ? (
-                <div className="flex flex-col items-center justify-center py-16">
-                  <Loader2 className="h-8 w-8 animate-spin text-primary mb-4" />
-                  <p className="text-sm text-muted-foreground">加载文件内容...</p>
-                </div>
-              ) : (
-                <div className="border-t">
-                  <MarkdownEditor
-                    value={fileContent}
-                    readOnly
-                    height="500px"
-                    language={getLanguageFromFilename(selectedFile)}
-                  />
-                </div>
-              )
+                </CardContent>
+              </Card>
             )}
-          </CardContent>
-        </Card>
+
+            {/* 右侧内容区域 */}
+            <Card className="overflow-hidden">
+              <CardHeader className="border-b bg-muted/20">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <CardTitle className="text-xl">
+                      {selectedFile || 'SKILL.md'}
+                    </CardTitle>
+                    <CardDescription>
+                      {selectedFile && selectedFile !== 'SKILL.md' ? '文件内容' : 'Skill 主文档'}
+                    </CardDescription>
+                  </div>
+                  {skill.content && (!selectedFile || selectedFile === 'SKILL.md') && (
+                    <div className="flex items-center gap-1 rounded-lg border bg-background p-1">
+                      <Button
+                        variant={viewMode === 'preview' ? 'default' : 'ghost'}
+                        size="sm"
+                        onClick={() => setViewMode('preview')}
+                        className="h-8 gap-1.5 text-xs transition-all"
+                      >
+                        <Eye className="h-3.5 w-3.5" />
+                        预览
+                      </Button>
+                      <Button
+                        variant={viewMode === 'code' ? 'default' : 'ghost'}
+                        size="sm"
+                        onClick={() => setViewMode('code')}
+                        className="h-8 gap-1.5 text-xs transition-all"
+                      >
+                        <Code className="h-3.5 w-3.5" />
+                        源代码
+                      </Button>
+                    </div>
+                  )}
+                </div>
+              </CardHeader>
+              <CardContent className="p-0">
+                {!selectedFile || selectedFile === 'SKILL.md' ? (
+                  skill.content ? (
+                    <div className="transition-all duration-200">
+                      {(() => {
+                        const { content: contentWithoutFrontmatter } = parseFrontmatter(skill.content);
+                        return viewMode === 'preview' ? (
+                          <div className="max-h-[72vh] overflow-y-auto">
+                            <div className="markdown-preview p-8">
+                              <ReactMarkdown>
+                                {contentWithoutFrontmatter}
+                              </ReactMarkdown>
+                            </div>
+                          </div>
+                        ) : (
+                          <div className="max-h-[72vh] overflow-y-auto border-t">
+                            <MarkdownEditor value={skill.content} readOnly height="500px" />
+                          </div>
+                        );
+                      })()}
+                    </div>
+                  ) : (
+                    <div className="flex flex-col items-center justify-center py-16 text-center text-muted-foreground">
+                      <p className="text-lg font-medium mb-1">没有 SKILL.md 文件</p>
+                      <p className="text-sm">该 Skill 暂无文档内容</p>
+                    </div>
+                  )
+                ) : loadingFile ? (
+                  <div className="flex flex-col items-center justify-center py-16">
+                    <Loader2 className="h-8 w-8 animate-spin text-primary mb-4" />
+                    <p className="text-sm text-muted-foreground">加载文件内容...</p>
+                  </div>
+                ) : (
+                  <div className="max-h-[72vh] overflow-y-auto border-t">
+                    <MarkdownEditor
+                      value={fileContent}
+                      readOnly
+                      height="500px"
+                      language={getLanguageFromFilename(selectedFile)}
+                    />
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          </div>
       </div>
 
       {/* 应用到其他工具对话框 */}

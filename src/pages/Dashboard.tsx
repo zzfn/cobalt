@@ -1,15 +1,12 @@
 import { useEffect, useCallback, useState } from 'react';
 import { useAtom } from 'jotai';
 import {
-  LayoutDashboard,
   RefreshCw,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { toast } from 'sonner';
 import ActivityList from '@/components/dashboard/ActivityList';
-import RecentProjects from '@/components/dashboard/RecentProjects';
 import TokenUsageOverview from '@/components/dashboard/TokenUsageOverview';
-import WorkspaceInfo from '@/components/dashboard/WorkspaceInfo';
 import NetworkChecker from '@/components/dashboard/NetworkChecker';
 import {
   recentActivitiesAtom,
@@ -19,6 +16,12 @@ import {
 import { readConversationHistory } from '@/services/config';
 import { clearActivities } from '@/lib/activityLogger';
 import { readStatsCache } from '@/services/tokenUsage';
+
+function formatCompactNumber(num: number): string {
+  if (num >= 1000000) return `${(num / 1000000).toFixed(1)}M`;
+  if (num >= 1000) return `${(num / 1000).toFixed(1)}K`;
+  return num.toString();
+}
 
 export default function Dashboard() {
   const [activities, setActivities] = useAtom(recentActivitiesAtom);
@@ -60,55 +63,101 @@ export default function Dashboard() {
     toast.success('活动记录已清除');
   };
 
+  const totalTokens: number = tokenStats
+    ? (Object.values(tokenStats.modelUsage ?? {}) as any[]).reduce((sum: number, model: any) => {
+        return sum + model.inputTokens + model.outputTokens;
+      }, 0)
+    : 0;
+  const projectCount = new Set(
+    activities
+      .map((activity) => activity.metadata?.project)
+      .filter((project): project is string => typeof project === 'string' && project.length > 0)
+  ).size;
+  const summaryCards = [
+    {
+      title: '最近对话',
+      value: activities.length.toString(),
+      description: '最近 20 条历史记录',
+    },
+    {
+      title: '活跃项目',
+      value: projectCount.toString(),
+      description: '从最近对话中识别',
+    },
+    {
+      title: '累计 Token',
+      value: formatCompactNumber(totalTokens),
+      description: '本地缓存统计',
+    },
+  ];
+
   return (
-    <div className="space-y-8">
-      {/* 页面标题 - Figma 极简风格 */}
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-3">
-          <LayoutDashboard className="h-5 w-5 text-muted-foreground/50" strokeWidth={1.5} />
+    <div className="space-y-6">
+      <section className="panel-surface px-5 py-4 sm:px-6">
+        <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
           <div>
-            <h1 className="text-xl font-semibold tracking-tight">仪表板</h1>
-            <p className="text-sm text-muted-foreground/60">
-              Claude Code 配置与管理
+            <h1 className="text-2xl font-semibold tracking-[-0.04em]">仪表板</h1>
+            <p className="mt-1 text-sm text-muted-foreground">
+              最近使用情况与当前状态
             </p>
           </div>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={loadDashboardData}
+            disabled={loading}
+            className="h-11 px-4"
+          >
+            <RefreshCw className={`mr-2 h-4 w-4 ${loading ? 'animate-spin' : ''}`} strokeWidth={1.7} />
+            刷新数据
+          </Button>
         </div>
-        <Button
-          variant="ghost"
-          size="sm"
-          onClick={loadDashboardData}
-          disabled={loading}
-          className="h-8 text-muted-foreground/60 hover:text-muted-foreground hover:bg-muted/50"
-        >
-          <RefreshCw className={`h-3.5 w-3.5 mr-2 ${loading ? 'animate-spin' : ''}`} strokeWidth={1.5} />
-          刷新
-        </Button>
-      </div>
+      </section>
 
-      {/* 错误提示 - 极简风格 */}
       {error && (
-        <div className="border-l-2 border-destructive pl-3 py-2">
+        <div className="panel-surface border-destructive/30 bg-destructive/5 px-5 py-4">
           <p className="text-sm text-destructive">{error}</p>
         </div>
       )}
 
-      {/* 第一行：Token 用量 + 工作区 */}
-      <div className="grid gap-4 sm:grid-cols-2">
-        <TokenUsageOverview stats={tokenStats} loading={loading} />
-        <WorkspaceInfo />
+      <section className="panel-surface px-4 py-3 sm:px-5">
+        <div className="grid gap-3 md:grid-cols-3">
+          {summaryCards.map((item) => (
+            <div
+              key={item.title}
+              className="flex items-baseline justify-between rounded-[18px] px-3 py-3 md:block md:px-4"
+            >
+              <div>
+                <p className="text-xs uppercase tracking-[0.18em] text-muted-foreground/75">
+                  {item.title}
+                </p>
+                <p className="mt-2 text-2xl font-semibold tracking-[-0.04em] md:text-3xl">
+                  {item.value}
+                </p>
+              </div>
+              <p className="text-right text-xs text-muted-foreground/75 md:mt-2 md:text-left">
+                {item.description}
+              </p>
+            </div>
+          ))}
+        </div>
+      </section>
+
+      <div className="grid gap-6 xl:grid-cols-[1.1fr_0.9fr]">
+        <div>
+          <TokenUsageOverview stats={tokenStats} loading={loading} />
+        </div>
+        <div>
+          <NetworkChecker />
+        </div>
       </div>
 
-      {/* 网络检测 */}
-      <NetworkChecker />
-
-      {/* 第二行：最近项目 + 最近对话 */}
-      <div className="grid gap-6 lg:grid-cols-2">
-        <RecentProjects activities={activities} loading={loading} />
+      <div>
         <ActivityList
           activities={activities}
           onClear={handleClearActivities}
           loading={loading}
-          maxHeight="320px"
+          maxHeight="420px"
         />
       </div>
     </div>

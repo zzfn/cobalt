@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
-import { Wifi, WifiOff, RefreshCw, Loader2 } from 'lucide-react';
+import { RefreshCw, Loader2 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
@@ -78,27 +78,17 @@ export default function NetworkChecker() {
   }, [runChecks]);
 
   const allReachable = endpoints.every((e) => e.status === 'reachable');
-  const anyUnreachable = endpoints.some((e) => e.status === 'unreachable');
   const isChecking = endpoints.some((e) => e.status === 'checking');
 
   return (
-    <Card className="border border-border-strong">
-      <CardHeader className="pb-3">
+    <Card className="border-border/70">
+      <CardHeader className="pb-2">
         <div className="flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            {isChecking ? (
-              <Loader2 className="h-4 w-4 text-muted-foreground/50 animate-spin" strokeWidth={1.5} />
-            ) : anyUnreachable ? (
-              <WifiOff className="h-4 w-4 text-red-400" strokeWidth={1.5} />
-            ) : (
-              <Wifi className="h-4 w-4 text-muted-foreground/50" strokeWidth={1.5} />
-            )}
-            <CardTitle className="text-sm font-medium">网络检测</CardTitle>
-          </div>
+          <CardTitle className="text-sm font-medium">网络检测</CardTitle>
           <Button
             variant="ghost"
             size="icon"
-            className="h-6 w-6 rounded-sm hover:bg-muted/50"
+            className="h-7 w-7 rounded-[10px] hover:bg-muted/50"
             onClick={runChecks}
             disabled={checking}
             title="重新检测"
@@ -107,17 +97,17 @@ export default function NetworkChecker() {
           </Button>
         </div>
       </CardHeader>
-      <CardContent className="pt-0 space-y-2">
+      <CardContent className="space-y-1.5 pt-0">
         {endpoints.map((endpoint) => (
           <div
             key={endpoint.url}
-            className="flex items-center justify-between py-1.5"
+            className="flex items-center justify-between rounded-[14px] border border-border/55 px-3 py-2"
           >
             <div className="flex items-center gap-2.5">
               <StatusDot status={endpoint.status} />
-              <span className="text-sm">{endpoint.name}</span>
+              <span className="text-[13px]">{endpoint.name}</span>
             </div>
-            <div className="text-xs text-muted-foreground/60 tabular-nums">
+            <div className="text-[11px] text-muted-foreground/60 tabular-nums">
               {endpoint.status === 'checking' && '检测中...'}
               {endpoint.status === 'reachable' && endpoint.latency !== null && `${endpoint.latency} ms`}
               {endpoint.status === 'unreachable' && <span className="text-red-400">不可达</span>}
@@ -126,7 +116,7 @@ export default function NetworkChecker() {
         ))}
         {!isChecking && (
           <p className={cn(
-            'text-xs pt-1 border-t border-border/50',
+            'border-t border-border/50 pt-1.5 text-[11px]',
             allReachable ? 'text-muted-foreground/50' : 'text-red-400/80'
           )}>
             {allReachable ? '网络连接正常' : '部分节点无法访问，请检查网络或代理设置'}

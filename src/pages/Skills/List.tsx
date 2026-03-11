@@ -1,7 +1,7 @@
 import { useEffect, useState, useCallback } from 'react';
 import { toast } from 'sonner';
 import { useAtom, useAtomValue, useSetAtom } from 'jotai';
-import { Sparkles, Search, Filter, RefreshCw, Plus, Loader2, CheckCircle2, Globe, Folder } from 'lucide-react';
+import { Search, Filter, RefreshCw, Plus, Loader2, CheckCircle2 } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import {
@@ -270,282 +270,268 @@ export default function SkillsList() {
 
   return (
     <div className="space-y-6">
-      <div className="sticky top-0 z-20 -mx-2 space-y-4 border-b bg-content-area/95 px-2 py-3 backdrop-blur supports-[backdrop-filter]:bg-content-area/80">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <Sparkles className="h-8 w-8" />
+      <div className="sticky top-0 z-20 space-y-4 pt-1">
+        <div className="page-hero px-5 py-5 sm:px-6">
+          <div className="flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between">
             <div>
               <div className="flex items-center gap-2">
-                <h1 className="text-2xl font-bold">Skills 管理</h1>
-                {/* 工作区标签 */}
+                <h1 className="text-3xl font-semibold tracking-[-0.04em]">Skills 管理</h1>
                 <Badge variant={skillsScope === 'global' ? 'secondary' : 'default'} className="gap-1">
-                  {skillsScope === 'global' ? (
-                    <>
-                      <Globe className="h-3 w-3" />
-                      全局
-                    </>
-                  ) : (
-                    <>
-                      <Folder className="h-3 w-3" />
-                      {currentWorkspace?.name}
-                    </>
-                  )}
+                  {skillsScope === 'global' ? '全局' : currentWorkspace?.name}
                 </Badge>
               </div>
-              <p className="text-muted-foreground">
+              <p className="mt-2 max-w-2xl text-sm leading-6 text-muted-foreground">
                 {skillsScope === 'global'
                   ? '管理全局已安装的 Skills'
                   : `管理 ${currentWorkspace?.name} 工作区的 Skills`}
               </p>
             </div>
-          </div>
-          <div className="flex gap-2">
-            <Dialog open={installDialogOpen} onOpenChange={setInstallDialogOpen}>
-              <DialogTrigger asChild>
-                <Button variant="default" size="sm">
-                  <Plus className="mr-2 h-4 w-4" />
-                  安装 Skill
-                </Button>
-              </DialogTrigger>
-              <DialogContent className="max-w-2xl max-h-[80vh] overflow-y-auto">
-              <DialogHeader>
-                <DialogTitle>从仓库安装 Skill</DialogTitle>
-                <DialogDescription>
-                  输入 Git 仓库 URL，扫描并选择要安装的 Skills
-                </DialogDescription>
-              </DialogHeader>
-              <div className="space-y-4">
-                {/* 仓库 URL 输入 */}
-                <div className="space-y-2">
-                  <Label htmlFor="repo-url">仓库 URL</Label>
-                  <div className="flex gap-2">
-                    <Input
-                      id="repo-url"
-                      placeholder="https://github.com/username/skill-name"
-                      value={repoUrl}
-                      onChange={(e) => setRepoUrl(e.target.value)}
-                      onKeyDown={(e) => {
-                        if (e.key === 'Enter' && !scanning && scannedSkills.length === 0) {
-                          handleScanRepo();
-                        }
-                      }}
-                      disabled={scanning || installing}
-                    />
-                    <Button
-                      onClick={() => handleScanRepo()}
-                      disabled={scanning || installing || !repoUrl.trim()}
-                    >
-                      {scanning ? (
-                        <>
-                          <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                          扫描中...
-                        </>
-                      ) : (
-                        '扫描'
-                      )}
-                    </Button>
-                  </div>
-                  <p className="text-xs text-muted-foreground">
-                    支持 GitHub、GitLab 等公开 Git 仓库（私有仓库需先配置 Git 凭据）
-                  </p>
-                </div>
-
-                {/* 错误提示 - 放在 URL 输入框下方，更醒目 */}
-                {installError && (
-                  <div className="rounded-lg border border-destructive/50 bg-destructive/10 p-3">
-                    <p className="text-sm text-destructive whitespace-pre-line">{installError}</p>
-                  </div>
-                )}
-
-                {/* 扫描到的 Skills 列表 */}
-                {scannedSkills.length > 0 && (
-                  <div className="space-y-3">
-                    <div className="flex items-center justify-between">
-                      <Label>选择要安装的 Skills ({selectedSkills.size}/{scannedSkills.length})</Label>
+            <div className="flex flex-wrap gap-2">
+              <Dialog open={installDialogOpen} onOpenChange={setInstallDialogOpen}>
+                <DialogTrigger asChild>
+                  <Button variant="default" size="sm" className="h-11 px-4">
+                    <Plus className="mr-2 h-4 w-4" />
+                    安装 Skill
+                  </Button>
+                </DialogTrigger>
+                <DialogContent className="max-h-[80vh] max-w-2xl overflow-y-auto">
+                  <DialogHeader>
+                    <DialogTitle>从仓库安装 Skill</DialogTitle>
+                    <DialogDescription>
+                      输入 Git 仓库 URL，扫描并选择要安装的 Skills
+                    </DialogDescription>
+                  </DialogHeader>
+                  <div className="space-y-4">
+                    {/* 仓库 URL 输入 */}
+                    <div className="space-y-2">
+                      <Label htmlFor="repo-url">仓库 URL</Label>
                       <div className="flex gap-2">
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => {
-                            const uninstalled = scannedSkills
-                              .filter(s => !s.alreadyInstalled)
-                              .map(s => s.name);
-                            setSelectedSkills(new Set(uninstalled));
+                        <Input
+                          id="repo-url"
+                          placeholder="https://github.com/username/skill-name"
+                          value={repoUrl}
+                          onChange={(e) => setRepoUrl(e.target.value)}
+                          onKeyDown={(e) => {
+                            if (e.key === 'Enter' && !scanning && scannedSkills.length === 0) {
+                              handleScanRepo();
+                            }
                           }}
-                        >
-                          全选未安装
-                        </Button>
+                          disabled={scanning || installing}
+                        />
                         <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => setSelectedSkills(new Set())}
+                          onClick={() => handleScanRepo()}
+                          disabled={scanning || installing || !repoUrl.trim()}
                         >
-                          取消全选
+                          {scanning ? (
+                            <>
+                              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                              扫描中...
+                            </>
+                          ) : (
+                            '扫描'
+                          )}
                         </Button>
                       </div>
+                      <p className="text-xs text-muted-foreground">
+                        支持 GitHub、GitLab 等公开 Git 仓库（私有仓库需先配置 Git 凭据）
+                      </p>
                     </div>
-                    <div className="space-y-2 max-h-[300px] overflow-y-auto border rounded-lg p-3">
-                      {scannedSkills.map((skill) => (
-                        <div
-                          key={skill.name}
-                          className={cn(
-                            'flex items-start gap-3 p-3 rounded-lg border transition-colors',
-                            skill.alreadyInstalled
-                              ? 'bg-muted/50 opacity-60'
-                              : selectedSkills.has(skill.name)
-                              ? 'bg-primary/5 border-primary'
-                              : 'hover:bg-muted/50'
-                          )}
-                        >
-                          <Checkbox
-                            id={`skill-${skill.name}`}
-                            checked={selectedSkills.has(skill.name)}
-                            onCheckedChange={() => toggleSkillSelection(skill.name)}
-                            disabled={skill.alreadyInstalled || installing}
-                            className="mt-1"
-                          />
-                          <div className="flex-1 min-w-0">
-                            <div className="flex items-center gap-2">
-                              <Label
-                                htmlFor={`skill-${skill.name}`}
-                                className={cn(
-                                  'font-medium cursor-pointer',
-                                  skill.alreadyInstalled && 'cursor-not-allowed'
-                                )}
-                              >
-                                {skill.name}
-                              </Label>
-                              {skill.alreadyInstalled && (
-                                <Badge variant="secondary" className="gap-1">
-                                  <CheckCircle2 className="h-3 w-3" />
-                                  已安装
-                                </Badge>
-                              )}
-                              {skill.version && (
-                                <Badge variant="outline" className="text-xs">
-                                  v{skill.version}
-                                </Badge>
-                              )}
-                            </div>
-                            {skill.description && (
-                              <p className="text-sm text-muted-foreground mt-1">
-                                {skill.description}
-                              </p>
-                            )}
+
+                    {/* 错误提示 - 放在 URL 输入框下方，更醒目 */}
+                    {installError && (
+                      <div className="rounded-lg border border-destructive/50 bg-destructive/10 p-3">
+                        <p className="text-sm text-destructive whitespace-pre-line">{installError}</p>
+                      </div>
+                    )}
+
+                    {/* 扫描到的 Skills 列表 */}
+                    {scannedSkills.length > 0 && (
+                      <div className="space-y-3">
+                        <div className="flex items-center justify-between">
+                          <Label>选择要安装的 Skills ({selectedSkills.size}/{scannedSkills.length})</Label>
+                          <div className="flex gap-2">
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => {
+                                const uninstalled = scannedSkills
+                                  .filter(s => !s.alreadyInstalled)
+                                  .map(s => s.name);
+                                setSelectedSkills(new Set(uninstalled));
+                              }}
+                            >
+                              全选未安装
+                            </Button>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => setSelectedSkills(new Set())}
+                            >
+                              取消全选
+                            </Button>
                           </div>
                         </div>
-                      ))}
-                    </div>
-                  </div>
-                )}
-
-                {/* 目标工具选择 */}
-                {scannedSkills.length > 0 && (
-                  <div className="space-y-3">
-                    <div className="flex items-center justify-between">
-                      <Label>选择目标 AI 工具 ({selectedTools.size})</Label>
-                      <div className="flex gap-2">
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => {
-                            const allTools = toolFilters
-                              .filter(t => t.value !== 'all')
-                              .map(t => t.value);
-                            setSelectedTools(new Set(allTools));
-                          }}
-                        >
-                          全选
-                        </Button>
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => setSelectedTools(new Set())}
-                        >
-                          取消全选
-                        </Button>
-                      </div>
-                    </div>
-                    <div className="grid grid-cols-2 gap-2">
-                      {toolFilters
-                        .filter(tool => tool.value !== 'all')
-                        .map((tool) => (
-                          <div
-                            key={tool.value}
-                            className={cn(
-                              'flex items-center gap-3 p-3 rounded-lg border transition-colors cursor-pointer',
-                              selectedTools.has(tool.value)
-                                ? 'bg-primary/5 border-primary'
-                                : 'hover:bg-muted/50'
-                            )}
-                            onClick={() => toggleToolSelection(tool.value)}
-                          >
-                            <Checkbox
-                              id={`tool-${tool.value}`}
-                              checked={selectedTools.has(tool.value)}
-                              onCheckedChange={() => toggleToolSelection(tool.value)}
-                              disabled={installing}
-                            />
-                            <Label
-                              htmlFor={`tool-${tool.value}`}
-                              className="flex items-center gap-2 cursor-pointer flex-1"
+                        <div className="space-y-2 max-h-[300px] overflow-y-auto rounded-lg border p-3">
+                          {scannedSkills.map((skill) => (
+                            <div
+                              key={skill.name}
+                              className={cn(
+                                'flex items-start gap-3 rounded-lg border p-3 transition-colors',
+                                skill.alreadyInstalled
+                                  ? 'bg-muted/50 opacity-60'
+                                  : selectedSkills.has(skill.name)
+                                    ? 'border-primary bg-primary/5'
+                                    : 'hover:bg-muted/50'
+                              )}
                             >
-                              <span>{tool.icon}</span>
-                              <span className="font-medium">{tool.label}</span>
-                            </Label>
+                              <Checkbox
+                                id={`skill-${skill.name}`}
+                                checked={selectedSkills.has(skill.name)}
+                                onCheckedChange={() => toggleSkillSelection(skill.name)}
+                                disabled={skill.alreadyInstalled || installing}
+                                className="mt-1"
+                              />
+                              <div className="min-w-0 flex-1">
+                                <div className="flex items-center gap-2">
+                                  <Label
+                                    htmlFor={`skill-${skill.name}`}
+                                    className={cn(
+                                      'cursor-pointer font-medium',
+                                      skill.alreadyInstalled && 'cursor-not-allowed'
+                                    )}
+                                  >
+                                    {skill.name}
+                                  </Label>
+                                  {skill.alreadyInstalled && (
+                                    <Badge variant="secondary" className="gap-1">
+                                      <CheckCircle2 className="h-3 w-3" />
+                                      已安装
+                                    </Badge>
+                                  )}
+                                  {skill.version && (
+                                    <Badge variant="outline" className="text-xs">
+                                      v{skill.version}
+                                    </Badge>
+                                  )}
+                                </div>
+                                {skill.description && (
+                                  <p className="mt-1 text-sm text-muted-foreground">
+                                    {skill.description}
+                                  </p>
+                                )}
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* 目标工具选择 */}
+                    {scannedSkills.length > 0 && (
+                      <div className="space-y-3">
+                        <div className="flex items-center justify-between">
+                          <Label>选择目标 AI 工具 ({selectedTools.size})</Label>
+                          <div className="flex gap-2">
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => {
+                                const allTools = toolFilters
+                                  .filter(t => t.value !== 'all')
+                                  .map(t => t.value);
+                                setSelectedTools(new Set(allTools));
+                              }}
+                            >
+                              全选
+                            </Button>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => setSelectedTools(new Set())}
+                            >
+                              取消全选
+                            </Button>
                           </div>
-                        ))}
-                    </div>
-                    <p className="text-xs text-muted-foreground">
-                      💡 Skill 将被安装到选中工具的 skills 目录中
-                    </p>
-                  </div>
-                )}
+                        </div>
+                        <div className="grid grid-cols-2 gap-2">
+                          {toolFilters
+                            .filter(tool => tool.value !== 'all')
+                            .map((tool) => (
+                              <div
+                                key={tool.value}
+                                className={cn(
+                                  'flex cursor-pointer items-center gap-3 rounded-lg border p-3 transition-colors',
+                                  selectedTools.has(tool.value)
+                                    ? 'border-primary bg-primary/5'
+                                    : 'hover:bg-muted/50'
+                                )}
+                                onClick={() => toggleToolSelection(tool.value)}
+                              >
+                                <Checkbox
+                                  id={`tool-${tool.value}`}
+                                  checked={selectedTools.has(tool.value)}
+                                  onCheckedChange={() => toggleToolSelection(tool.value)}
+                                  disabled={installing}
+                                />
+                                <Label
+                                  htmlFor={`tool-${tool.value}`}
+                                  className="flex flex-1 cursor-pointer items-center gap-2"
+                                >
+                                  <span>{tool.icon}</span>
+                                  <span className="font-medium">{tool.label}</span>
+                                </Label>
+                              </div>
+                            ))}
+                        </div>
+                        <p className="text-xs text-muted-foreground">
+                          Skill 将被安装到选中工具的 skills 目录中
+                        </p>
+                      </div>
+                    )}
 
-                {/* 按钮 */}
-                <div className="flex justify-end gap-2">
-                  <Button
-                    variant="outline"
-                    onClick={() => {
-                      setInstallDialogOpen(false);
-                      setInstallError(null);
-                      setScannedSkills([]);
-                      setSelectedSkills(new Set());
-                      setSelectedTools(new Set(['claude-code']));
-                      setRepoUrl('');
-                    }}
-                    disabled={scanning || installing}
-                  >
-                    取消
-                  </Button>
-                  {scannedSkills.length > 0 && (
-                    <Button
-                      onClick={() => handleInstallSkill()}
-                      disabled={installing || selectedSkills.size === 0}
-                    >
-                      {installing ? (
-                        <>
-                          <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                          安装中...
-                        </>
-                      ) : (
-                        `安装 (${selectedSkills.size})`
+                    <div className="flex justify-end gap-2">
+                      <Button
+                        variant="outline"
+                        onClick={() => {
+                          setInstallDialogOpen(false);
+                          setInstallError(null);
+                          setScannedSkills([]);
+                          setSelectedSkills(new Set());
+                          setSelectedTools(new Set(['claude-code']));
+                          setRepoUrl('');
+                        }}
+                        disabled={scanning || installing}
+                      >
+                        取消
+                      </Button>
+                      {scannedSkills.length > 0 && (
+                        <Button
+                          onClick={() => handleInstallSkill()}
+                          disabled={installing || selectedSkills.size === 0}
+                        >
+                          {installing ? (
+                            <>
+                              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                              安装中...
+                            </>
+                          ) : (
+                            `安装 (${selectedSkills.size})`
+                          )}
+                        </Button>
                       )}
-                    </Button>
-                  )}
-                </div>
-              </div>
-              </DialogContent>
-            </Dialog>
-            <Button variant="outline" size="sm" onClick={loadSkills} disabled={loading}>
-              <RefreshCw className={`mr-2 h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
-              刷新
-            </Button>
+                    </div>
+                  </div>
+                </DialogContent>
+              </Dialog>
+              <Button variant="outline" size="sm" onClick={loadSkills} disabled={loading} className="h-11 px-4">
+                <RefreshCw className={`mr-2 h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
+                刷新
+              </Button>
+            </div>
+            </div>
           </div>
-        </div>
 
-        {/* 搜索和过滤 */}
-        <div className="flex flex-col gap-4 sm:flex-row">
+        <div className="panel-surface flex flex-col gap-4 px-4 py-4 sm:flex-row sm:px-5">
           <div className="relative flex-1">
             <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
             <Input
@@ -557,7 +543,7 @@ export default function SkillsList() {
           </div>
           <Dialog>
             <DialogTrigger asChild>
-              <Button variant="outline">
+              <Button variant="outline" className="h-11">
                 <Filter className="mr-2 h-4 w-4" />
                 过滤
               </Button>
@@ -606,13 +592,12 @@ export default function SkillsList() {
       {loading ? (
         <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
           {[1, 2, 3].map((i) => (
-            <div key={i} className="h-40 animate-pulse rounded-lg bg-muted" />
+            <div key={i} className="h-48 animate-pulse rounded-[24px] bg-muted/70" />
           ))}
         </div>
       ) : filteredSkills.length === 0 ? (
-        <div className="flex flex-col items-center justify-center py-12 text-center">
-          <Sparkles className="h-12 w-12 text-muted-foreground" />
-          <h3 className="mt-4 text-lg font-medium">没有找到 Skills</h3>
+        <div className="panel-surface flex flex-col items-center justify-center py-16 text-center">
+          <h3 className="text-lg font-medium">没有找到 Skills</h3>
           <p className="mt-2 text-sm text-muted-foreground">
             {skills.length === 0
               ? '还没有安装任何 Skills，请在 ~/.claude/skills 目录下添加'

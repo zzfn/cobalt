@@ -61,6 +61,7 @@ interface BackendSkillEntry {
     tags?: string[];
     targetTools?: string[];
     repository?: string;
+    sourceId?: string;
     commitHash?: string;
   };
 }
@@ -80,6 +81,7 @@ interface BackendSkillDetail {
     tags?: string[];
     targetTools?: string[];
     repository?: string;
+    sourceId?: string;
     commitHash?: string;
   };
   files: string[];
@@ -104,6 +106,7 @@ function toSkillRegistryEntry(entry: BackendSkillEntry): SkillRegistryEntry {
       tags: entry.metadata?.tags || [],
       targetTools: entry.metadata?.targetTools as AiToolType[],
       repository: entry.metadata?.repository,
+      sourceId: entry.metadata?.sourceId,
     },
   };
 }
@@ -129,6 +132,7 @@ function toSkillDetail(detail: BackendSkillDetail): SkillDetail {
       tags: detail.metadata?.tags || [],
       targetTools: detail.metadata?.targetTools as AiToolType[],
       repository: detail.metadata?.repository,
+      sourceId: detail.metadata?.sourceId,
     },
   };
 }

@@ -1,6 +1,6 @@
 import { useEffect, useCallback, useMemo } from 'react';
 import { useAtom } from 'jotai';
-import { RefreshCw, BarChart3 } from 'lucide-react';
+import { RefreshCw } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { toast } from 'sonner';
@@ -65,8 +65,7 @@ export default function TokenUsage() {
   return (
     <div className="space-y-6 p-6">
       <div className="sticky top-0 z-20 -mx-2 flex items-center justify-between border-b bg-content-area/95 px-2 py-3 backdrop-blur supports-[backdrop-filter]:bg-content-area/80">
-        <div className="flex items-center gap-3">
-          <BarChart3 className="h-6 w-6 text-primary" />
+        <div>
           <h1 className="text-2xl font-bold">Token 用量</h1>
         </div>
         <Button
@@ -117,7 +116,6 @@ export default function TokenUsage() {
       {/* 空状态 */}
       {!loading && !stats && (
         <div className="flex flex-col items-center justify-center py-20 text-muted-foreground">
-          <BarChart3 className="mb-4 h-12 w-12" />
           <p className="text-lg font-medium">暂无统计数据</p>
           <p className="text-sm">请确保 Claude Code 已生成 stats-cache.json</p>
         </div>

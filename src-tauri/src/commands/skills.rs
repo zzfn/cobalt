@@ -597,13 +597,48 @@ pub fn read_skill_md(skill_name: String, workspace_path: Option<String>) -> Resu
 
     // 读取 metadata.json（如果存在）
     let metadata_path = skill_dir.join("metadata.json");
-    let metadata: Option<SkillMetadata> = if metadata_path.exists() {
+    let mut metadata: Option<SkillMetadata> = if metadata_path.exists() {
         let meta_content = fs::read_to_string(&metadata_path)
             .map_err(|e| format!("读取 metadata.json 失败: {}", e))?;
         serde_json::from_str(&meta_content).ok()
     } else {
         None
     };
+
+    // 合并注册表中的 metadata，避免详情页与列表页来源信息不一致
+    if workspace_path.is_none() {
+        if let Ok(registry) = read_skill_registry() {
+            if let Some(entry) = registry.skills.iter().find(|s| s.name == skill_name) {
+                if let Some(registry_meta) = &entry.metadata {
+                    match metadata.as_mut() {
+                        Some(meta) => {
+                            if meta.version.is_none() {
+                                meta.version = registry_meta.version.clone();
+                            }
+                            if meta.description.is_none() {
+                                meta.description = registry_meta.description.clone();
+                            }
+                            if meta.tags.is_empty() {
+                                meta.tags = registry_meta.tags.clone();
+                            }
+                            if meta.target_tools.is_empty() {
+                                meta.target_tools = registry_meta.target_tools.clone();
+                            }
+                            if meta.repository.is_none() {
+                                meta.repository = registry_meta.repository.clone();
+                            }
+                            if meta.source_id.is_none() {
+                                meta.source_id = registry_meta.source_id.clone();
+                            }
+                        }
+                        None => {
+                            metadata = Some(registry_meta.clone());
+                        }
+                    }
+                }
+            }
+        }
+    }
 
     // 列出文件
     let files = list_skill_files_internal(&skill_dir)?;
