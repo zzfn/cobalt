@@ -97,7 +97,7 @@ export default function SkillCard({ skill, onToggle, onDelete, className, source
             )}
             {skill.installedBy && skill.installedBy.length > 0 && (
               <div className="inline-flex flex-wrap items-center gap-1.5 rounded-[14px] border border-border/70 bg-muted/35 px-2.5 py-1.5 text-xs text-muted-foreground">
-                <span className="font-medium text-foreground/80">安装自</span>
+                <span className="font-medium text-foreground/80">已安装到</span>
                 {skill.installedBy.map((tool) => {
                   const toolMeta = AI_TOOL_META[tool as keyof typeof AI_TOOL_META];
                   return (
