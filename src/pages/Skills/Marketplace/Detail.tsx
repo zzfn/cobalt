@@ -241,75 +241,77 @@ export default function MarketplaceDetail() {
 
   return (
     <div className="container mx-auto p-6 space-y-6">
-      {/* 页面标题 */}
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-3">
-          <Button variant="ghost" size="icon" onClick={() => navigate('/skills/marketplace')}>
-            <ArrowLeft className="h-5 w-5" />
-          </Button>
-          <div>
-            <h1 className="text-3xl font-bold">{source.name}</h1>
-            <p className="text-muted-foreground">{source.description || '暂无描述'}</p>
+      <div className="sticky top-0 z-20 -mx-2 space-y-4 border-b bg-content-area/95 px-2 py-3 backdrop-blur supports-[backdrop-filter]:bg-content-area/80">
+        {/* 页面标题 */}
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <Button variant="ghost" size="icon" onClick={() => navigate('/skills/marketplace')}>
+              <ArrowLeft className="h-5 w-5" />
+            </Button>
+            <div>
+              <h1 className="text-3xl font-bold">{source.name}</h1>
+              <p className="text-muted-foreground">{source.description || '暂无描述'}</p>
+            </div>
           </div>
-        </div>
-        <div className="flex gap-2">
-          <Button variant="outline" onClick={handleRefresh} disabled={refreshing}>
-            {refreshing ? (
-              <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-            ) : (
-              <RefreshCw className="h-4 w-4 mr-2" />
-            )}
-            刷新
-          </Button>
-          {selectedSkills.size > 0 && (
-            <Button onClick={handleInstallSelected} disabled={installing}>
-              {installing ? (
+          <div className="flex gap-2">
+            <Button variant="outline" onClick={handleRefresh} disabled={refreshing}>
+              {refreshing ? (
                 <Loader2 className="h-4 w-4 mr-2 animate-spin" />
               ) : (
-                <Download className="h-4 w-4 mr-2" />
+                <RefreshCw className="h-4 w-4 mr-2" />
               )}
-              安装选中 ({selectedSkills.size})
+              刷新
             </Button>
-          )}
+            {selectedSkills.size > 0 && (
+              <Button onClick={handleInstallSelected} disabled={installing}>
+                {installing ? (
+                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                ) : (
+                  <Download className="h-4 w-4 mr-2" />
+                )}
+                安装选中 ({selectedSkills.size})
+              </Button>
+            )}
+          </div>
         </div>
-      </div>
 
-      {/* 搜索和筛选 */}
-      <div className="flex gap-4">
-        <div className="flex-1 relative">
-          <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-          <Input
-            placeholder="搜索 Skills..."
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            className="pl-10"
-          />
-        </div>
-        <div className="flex gap-2">
-          <Button
-            variant={filterStatus === 'all' ? 'default' : 'outline'}
-            onClick={() => setFilterStatus('all')}
-          >
-            全部
-          </Button>
-          <Button
-            variant={filterStatus === 'installed' ? 'default' : 'outline'}
-            onClick={() => setFilterStatus('installed')}
-          >
-            已安装
-          </Button>
-          <Button
-            variant={filterStatus === 'not-installed' ? 'default' : 'outline'}
-            onClick={() => setFilterStatus('not-installed')}
-          >
-            未安装
-          </Button>
-          <Button
-            variant={filterStatus === 'has-update' ? 'default' : 'outline'}
-            onClick={() => setFilterStatus('has-update')}
-          >
-            有更新
-          </Button>
+        {/* 搜索和筛选 */}
+        <div className="flex gap-4">
+          <div className="flex-1 relative">
+            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+            <Input
+              placeholder="搜索 Skills..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="pl-10"
+            />
+          </div>
+          <div className="flex gap-2">
+            <Button
+              variant={filterStatus === 'all' ? 'default' : 'outline'}
+              onClick={() => setFilterStatus('all')}
+            >
+              全部
+            </Button>
+            <Button
+              variant={filterStatus === 'installed' ? 'default' : 'outline'}
+              onClick={() => setFilterStatus('installed')}
+            >
+              已安装
+            </Button>
+            <Button
+              variant={filterStatus === 'not-installed' ? 'default' : 'outline'}
+              onClick={() => setFilterStatus('not-installed')}
+            >
+              未安装
+            </Button>
+            <Button
+              variant={filterStatus === 'has-update' ? 'default' : 'outline'}
+              onClick={() => setFilterStatus('has-update')}
+            >
+              有更新
+            </Button>
+          </div>
         </div>
       </div>
 

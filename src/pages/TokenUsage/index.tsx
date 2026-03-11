@@ -64,8 +64,7 @@ export default function TokenUsage() {
 
   return (
     <div className="space-y-6 p-6">
-      {/* 页面标题 */}
-      <div className="flex items-center justify-between">
+      <div className="sticky top-0 z-20 -mx-2 flex items-center justify-between border-b bg-content-area/95 px-2 py-3 backdrop-blur supports-[backdrop-filter]:bg-content-area/80">
         <div className="flex items-center gap-3">
           <BarChart3 className="h-6 w-6 text-primary" />
           <h1 className="text-2xl font-bold">Token 用量</h1>

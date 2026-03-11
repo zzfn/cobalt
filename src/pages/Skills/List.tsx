@@ -270,43 +270,44 @@ export default function SkillsList() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-3">
-          <Sparkles className="h-8 w-8" />
-          <div>
-            <div className="flex items-center gap-2">
-              <h1 className="text-2xl font-bold">Skills 管理</h1>
-              {/* 工作区标签 */}
-              <Badge variant={skillsScope === 'global' ? 'secondary' : 'default'} className="gap-1">
-                {skillsScope === 'global' ? (
-                  <>
-                    <Globe className="h-3 w-3" />
-                    全局
-                  </>
-                ) : (
-                  <>
-                    <Folder className="h-3 w-3" />
-                    {currentWorkspace?.name}
-                  </>
-                )}
-              </Badge>
+      <div className="sticky top-0 z-20 -mx-2 space-y-4 border-b bg-content-area/95 px-2 py-3 backdrop-blur supports-[backdrop-filter]:bg-content-area/80">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <Sparkles className="h-8 w-8" />
+            <div>
+              <div className="flex items-center gap-2">
+                <h1 className="text-2xl font-bold">Skills 管理</h1>
+                {/* 工作区标签 */}
+                <Badge variant={skillsScope === 'global' ? 'secondary' : 'default'} className="gap-1">
+                  {skillsScope === 'global' ? (
+                    <>
+                      <Globe className="h-3 w-3" />
+                      全局
+                    </>
+                  ) : (
+                    <>
+                      <Folder className="h-3 w-3" />
+                      {currentWorkspace?.name}
+                    </>
+                  )}
+                </Badge>
+              </div>
+              <p className="text-muted-foreground">
+                {skillsScope === 'global'
+                  ? '管理全局已安装的 Skills'
+                  : `管理 ${currentWorkspace?.name} 工作区的 Skills`}
+              </p>
             </div>
-            <p className="text-muted-foreground">
-              {skillsScope === 'global'
-                ? '管理全局已安装的 Skills'
-                : `管理 ${currentWorkspace?.name} 工作区的 Skills`}
-            </p>
           </div>
-        </div>
-        <div className="flex gap-2">
-          <Dialog open={installDialogOpen} onOpenChange={setInstallDialogOpen}>
-            <DialogTrigger asChild>
-              <Button variant="default" size="sm">
-                <Plus className="mr-2 h-4 w-4" />
-                安装 Skill
-              </Button>
-            </DialogTrigger>
-            <DialogContent className="max-w-2xl max-h-[80vh] overflow-y-auto">
+          <div className="flex gap-2">
+            <Dialog open={installDialogOpen} onOpenChange={setInstallDialogOpen}>
+              <DialogTrigger asChild>
+                <Button variant="default" size="sm">
+                  <Plus className="mr-2 h-4 w-4" />
+                  安装 Skill
+                </Button>
+              </DialogTrigger>
+              <DialogContent className="max-w-2xl max-h-[80vh] overflow-y-auto">
               <DialogHeader>
                 <DialogTitle>从仓库安装 Skill</DialogTitle>
                 <DialogDescription>
@@ -534,12 +535,62 @@ export default function SkillsList() {
                   )}
                 </div>
               </div>
+              </DialogContent>
+            </Dialog>
+            <Button variant="outline" size="sm" onClick={loadSkills} disabled={loading}>
+              <RefreshCw className={`mr-2 h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
+              刷新
+            </Button>
+          </div>
+        </div>
+
+        {/* 搜索和过滤 */}
+        <div className="flex flex-col gap-4 sm:flex-row">
+          <div className="relative flex-1">
+            <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+            <Input
+              placeholder="搜索 Skills..."
+              value={filter.search || ''}
+              onChange={(e) => setFilter({ ...filter, search: e.target.value })}
+              className="pl-9"
+            />
+          </div>
+          <Dialog>
+            <DialogTrigger asChild>
+              <Button variant="outline">
+                <Filter className="mr-2 h-4 w-4" />
+                过滤
+              </Button>
+            </DialogTrigger>
+            <DialogContent>
+              <DialogHeader>
+                <DialogTitle>过滤 Skills</DialogTitle>
+                <DialogDescription>选择要显示的 Skills 类型</DialogDescription>
+              </DialogHeader>
+              <div className="space-y-4">
+                <div>
+                  <p className="mb-2 text-sm font-medium">适用工具</p>
+                  <div className="flex flex-wrap gap-2">
+                    {toolFilters.map((option) => (
+                      <Badge
+                        key={option.value}
+                        variant={
+                          filter.targetTool === option.value ? 'default' : 'outline'
+                        }
+                        className="cursor-pointer gap-1"
+                        onClick={() =>
+                          setFilter({ ...filter, targetTool: option.value })
+                        }
+                      >
+                        <span>{option.icon}</span>
+                        <span>{option.label}</span>
+                      </Badge>
+                    ))}
+                  </div>
+                </div>
+              </div>
             </DialogContent>
           </Dialog>
-          <Button variant="outline" size="sm" onClick={loadSkills} disabled={loading}>
-            <RefreshCw className={`mr-2 h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
-            刷新
-          </Button>
         </div>
       </div>
 
@@ -550,55 +601,6 @@ export default function SkillsList() {
         loading={authDialogLoading}
         onConfirm={handleAuthConfirm}
       />
-
-      {/* 搜索和过滤 */}
-      <div className="flex flex-col gap-4 sm:flex-row">
-        <div className="relative flex-1">
-          <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-          <Input
-            placeholder="搜索 Skills..."
-            value={filter.search || ''}
-            onChange={(e) => setFilter({ ...filter, search: e.target.value })}
-            className="pl-9"
-          />
-        </div>
-        <Dialog>
-          <DialogTrigger asChild>
-            <Button variant="outline">
-              <Filter className="mr-2 h-4 w-4" />
-              过滤
-            </Button>
-          </DialogTrigger>
-          <DialogContent>
-            <DialogHeader>
-              <DialogTitle>过滤 Skills</DialogTitle>
-              <DialogDescription>选择要显示的 Skills 类型</DialogDescription>
-            </DialogHeader>
-            <div className="space-y-4">
-              <div>
-                <p className="mb-2 text-sm font-medium">适用工具</p>
-                <div className="flex flex-wrap gap-2">
-                  {toolFilters.map((option) => (
-                    <Badge
-                      key={option.value}
-                      variant={
-                        filter.targetTool === option.value ? 'default' : 'outline'
-                      }
-                      className="cursor-pointer gap-1"
-                      onClick={() =>
-                        setFilter({ ...filter, targetTool: option.value })
-                      }
-                    >
-                      <span>{option.icon}</span>
-                      <span>{option.label}</span>
-                    </Badge>
-                  ))}
-                </div>
-              </div>
-            </div>
-          </DialogContent>
-        </Dialog>
-      </div>
 
       {/* Skills 列表 */}
       {loading ? (

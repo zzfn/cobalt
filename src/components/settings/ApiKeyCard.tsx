@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Key, Plus, Trash2, Check, Pencil, Globe, Copy, Shield } from 'lucide-react';
+import { Key, Plus, Trash2, Check, Pencil, Globe, Copy, Shield, Eye, EyeOff } from 'lucide-react';
 import { toast } from 'sonner';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -12,6 +12,16 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
 import { cn } from '@/lib/utils';
 import type { ApiKeyProfile } from '@/types/settings';
 import { logActivity } from '@/lib/activityLogger';
@@ -23,8 +33,6 @@ interface ApiKeyCardProps {
   currentBaseUrl: string;
   onProfilesChange: (profiles: ApiKeyProfile[]) => void;
   onActiveProfileChange: (profileId: string | null) => void;
-  onApiKeyChange: (value: string) => void;
-  onBaseUrlChange: (value: string) => void;
   onSwitchProfile: (profileId: string) => void;
   onSaveProfiles: (profiles: ApiKeyProfile[], activeProfileId: string | null) => Promise<void>;
   onUseOfficialApi: () => Promise<void>;
@@ -37,8 +45,6 @@ export default function ApiKeyCard({
   currentBaseUrl,
   onProfilesChange,
   onActiveProfileChange,
-  onApiKeyChange,
-  onBaseUrlChange,
   onSwitchProfile,
   onSaveProfiles,
   onUseOfficialApi,
@@ -48,8 +54,9 @@ export default function ApiKeyCard({
   const [profileName, setProfileName] = useState('');
   const [profileApiKey, setProfileApiKey] = useState('');
   const [profileBaseUrl, setProfileBaseUrl] = useState('');
-  const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
+  const [deletingProfile, setDeletingProfile] = useState<ApiKeyProfile | null>(null);
   const [saving, setSaving] = useState(false);
+  const [showProfileApiKey, setShowProfileApiKey] = useState(false);
 
   // 遮蔽 API Key 显示
   const maskApiKey = (key: string) => {
@@ -72,8 +79,9 @@ export default function ApiKeyCard({
   const handleCreateProfile = () => {
     setEditingProfile(null);
     setProfileName('');
-    setProfileApiKey(currentApiKey);
-    setProfileBaseUrl(currentBaseUrl);
+    setProfileApiKey('');
+    setProfileBaseUrl('');
+    setShowProfileApiKey(false);
     setDialogOpen(true);
   };
 
@@ -125,31 +133,30 @@ export default function ApiKeyCard({
     }
   };
 
-  const handleDeleteProfile = async (e: React.MouseEvent, profileId: string) => {
+  const handleDeleteProfile = (e: React.MouseEvent, profile: ApiKeyProfile) => {
     e.stopPropagation();
-    if (deleteConfirmId === profileId) {
-      try {
-        const updatedProfiles = profiles.filter((p) => p.id !== profileId);
-        const newActiveProfileId = activeProfileId === profileId ? null : activeProfileId;
+    setDeletingProfile(profile);
+  };
 
-        // 立即保存到后端
-        await onSaveProfiles(updatedProfiles, newActiveProfileId);
-        onProfilesChange(updatedProfiles);
-        if (activeProfileId === profileId) {
-          onActiveProfileChange(null);
-        }
+  const confirmDeleteProfile = async () => {
+    if (!deletingProfile) return;
 
-        toast.success('档案已删除');
-        setDeleteConfirmId(null);
-      } catch (error) {
-        toast.error('删除档案失败', {
-          description: String(error),
-        });
+    try {
+      const updatedProfiles = profiles.filter((p) => p.id !== deletingProfile.id);
+      const newActiveProfileId = activeProfileId === deletingProfile.id ? null : activeProfileId;
+
+      await onSaveProfiles(updatedProfiles, newActiveProfileId);
+      onProfilesChange(updatedProfiles);
+      if (activeProfileId === deletingProfile.id) {
+        onActiveProfileChange(null);
       }
-    } else {
-      setDeleteConfirmId(profileId);
-      // 3秒后重置确认状态
-      setTimeout(() => setDeleteConfirmId(null), 3000);
+
+      toast.success('档案已删除');
+      setDeletingProfile(null);
+    } catch (error) {
+      toast.error('删除档案失败', {
+        description: String(error),
+      });
     }
   };
 
@@ -197,7 +204,7 @@ export default function ApiKeyCard({
             API 配置
           </CardTitle>
           <CardDescription>
-            管理多个 API 配置，点击卡片快速切换；选择「官方 API」使用默认配置
+            管理多个 API Key 配置，点击卡片可快速切换
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
@@ -248,7 +255,6 @@ export default function ApiKeyCard({
 
             {profiles.map((profile) => {
               const isActive = activeProfileId === profile.id;
-              const isDeleting = deleteConfirmId === profile.id;
 
               return (
                 <div
@@ -288,14 +294,9 @@ export default function ApiKeyCard({
                         <Pencil className="h-3.5 w-3.5 text-muted-foreground" />
                       </button>
                       <button
-                        onClick={(e) => handleDeleteProfile(e, profile.id)}
-                        className={cn(
-                          'p-1.5 rounded-md transition-colors',
-                          isDeleting
-                            ? 'bg-destructive text-destructive-foreground'
-                            : 'hover:bg-destructive/10 text-destructive'
-                        )}
-                        title={isDeleting ? '再次点击确认删除' : '删除'}
+                        onClick={(e) => handleDeleteProfile(e, profile)}
+                        className="p-1.5 rounded-md transition-colors hover:bg-destructive/10 text-destructive"
+                        title="删除"
                       >
                         <Trash2 className="h-3.5 w-3.5" />
                       </button>
@@ -331,42 +332,6 @@ export default function ApiKeyCard({
             </button>
           </div>
 
-          {/* 当前配置编辑区 */}
-          <div className="pt-4 border-t space-y-3">
-            <h4 className="text-sm font-medium">
-              {activeProfileId ? '编辑当前配置' : '快速配置'}
-            </h4>
-            <div className="grid gap-3 sm:grid-cols-2">
-              <div className="space-y-1.5">
-                <label className="text-xs text-muted-foreground">
-                  API Key
-                </label>
-                <Input
-                  type="password"
-                  placeholder="sk-ant-..."
-                  value={currentApiKey}
-                  onChange={(e) => onApiKeyChange(e.target.value)}
-                  className="font-mono text-sm"
-                />
-              </div>
-              <div className="space-y-1.5">
-                <label className="text-xs text-muted-foreground">
-                  Base URL
-                </label>
-                <Input
-                  placeholder="https://api.anthropic.com"
-                  value={currentBaseUrl}
-                  onChange={(e) => onBaseUrlChange(e.target.value)}
-                  className="font-mono text-sm"
-                />
-              </div>
-            </div>
-            {!activeProfileId && profiles.length === 0 && (
-              <p className="text-xs text-muted-foreground">
-                填写后点击上方"新建配置"保存为档案
-              </p>
-            )}
-          </div>
         </CardContent>
       </Card>
 
@@ -395,13 +360,28 @@ export default function ApiKeyCard({
             </div>
             <div className="space-y-2">
               <label className="text-sm font-medium">API Key</label>
-              <Input
-                type="password"
-                placeholder="sk-ant-..."
-                value={profileApiKey}
-                onChange={(e) => setProfileApiKey(e.target.value)}
-                className="font-mono text-sm"
-              />
+              <div className="relative">
+                <Input
+                  type={showProfileApiKey ? 'text' : 'password'}
+                  placeholder="sk-ant-..."
+                  value={profileApiKey}
+                  onChange={(e) => setProfileApiKey(e.target.value)}
+                  className="pr-10 font-mono text-sm"
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowProfileApiKey((prev) => !prev)}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                  aria-label={showProfileApiKey ? '隐藏 API Key' : '显示 API Key'}
+                  title={showProfileApiKey ? '隐藏 API Key' : '显示 API Key'}
+                >
+                  {showProfileApiKey ? (
+                    <EyeOff className="h-4 w-4" />
+                  ) : (
+                    <Eye className="h-4 w-4" />
+                  )}
+                </button>
+              </div>
             </div>
             <div className="space-y-2">
               <label className="text-sm font-medium">Base URL</label>
@@ -423,6 +403,26 @@ export default function ApiKeyCard({
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      <AlertDialog open={!!deletingProfile} onOpenChange={(open) => !open && setDeletingProfile(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>删除配置档案</AlertDialogTitle>
+            <AlertDialogDescription>
+              {`确定要删除“${deletingProfile?.name ?? ''}”吗？此操作不可撤销。`}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>取消</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={confirmDeleteProfile}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              删除
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </>
   );
 }

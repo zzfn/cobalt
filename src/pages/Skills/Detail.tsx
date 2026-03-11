@@ -591,17 +591,18 @@ export default function SkillDetail() {
 
   return (
     <div className="space-y-6 animate-in fade-in duration-300">
-      {/* 返回按钮 */}
-      <Link to="/skills">
-        <Button variant="ghost" size="sm" className="gap-2 hover:gap-3 transition-all">
-          <ArrowLeft className="h-4 w-4" />
-          返回 Skills 列表
-        </Button>
-      </Link>
+      <div className="sticky top-0 z-20 -mx-2 space-y-4 border-b bg-content-area/95 px-2 py-3 backdrop-blur supports-[backdrop-filter]:bg-content-area/80">
+        {/* 返回按钮 */}
+        <Link to="/skills">
+          <Button variant="ghost" size="sm" className="gap-2 hover:gap-3 transition-all">
+            <ArrowLeft className="h-4 w-4" />
+            返回 Skills 列表
+          </Button>
+        </Link>
 
-      {/* 标题区域 - 使用渐变背景卡片 */}
-      <Card className="border-primary/20 bg-gradient-to-br from-primary/5 via-background to-background">
-        <CardContent className="pt-6">
+        {/* 标题区域 - 使用渐变背景卡片 */}
+        <Card className="border-primary/20 bg-gradient-to-br from-primary/5 via-background to-background">
+          <CardContent className="pt-6">
           <div className="flex items-start justify-between gap-4">
             <div className="flex items-start gap-4 flex-1">
               <div className="rounded-xl bg-primary/10 p-3 ring-1 ring-primary/20">
@@ -865,8 +866,9 @@ export default function SkillDetail() {
               </AlertDialog>
             </div>
           </div>
-        </CardContent>
-      </Card>
+          </CardContent>
+        </Card>
+      </div>
 
       {/* 内容区域 */}
       <div className="grid grid-cols-1 lg:grid-cols-[280px_1fr] gap-6">

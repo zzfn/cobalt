@@ -37,6 +37,7 @@ import { Switch } from '@/components/ui/switch';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { toast } from 'sonner';
+import { toBrowsableRepoUrl } from '@/lib/utils';
 import {
   marketplaceListAtom,
   marketplaceLoadingAtom,
@@ -244,7 +245,7 @@ export default function MarketplaceList() {
   return (
     <div className="container mx-auto p-6 space-y-6">
       {/* 页面标题 */}
-      <div className="flex items-center justify-between">
+      <div className="sticky top-0 z-20 -mx-2 flex items-center justify-between border-b bg-content-area/95 px-2 py-3 backdrop-blur supports-[backdrop-filter]:bg-content-area/80">
         <div className="flex items-center gap-3">
           <Database className="h-8 w-8 text-primary" />
           <div>
@@ -433,7 +434,7 @@ export default function MarketplaceList() {
                       className="h-8 w-8"
                       onClick={(e) => {
                         e.stopPropagation();
-                        openUrl(source.url);
+                        openUrl(toBrowsableRepoUrl(source.url));
                       }}
                     >
                       <ExternalLink className="h-4 w-4" />

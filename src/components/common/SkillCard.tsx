@@ -16,7 +16,7 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from '@/components/ui/alert-dialog';
-import { cn } from '@/lib/utils';
+import { cn, toBrowsableRepoUrl } from '@/lib/utils';
 import type { SkillRegistryEntry } from '@/types/skills';
 import { AI_TOOL_META } from '@/types/skills';
 
@@ -130,7 +130,7 @@ export default function SkillCard({ skill, onToggle, onDelete, className, source
           <button
             type="button"
             className="mt-2 inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground"
-            onClick={(e) => { e.stopPropagation(); openUrl(skill.url!); }}
+            onClick={(e) => { e.stopPropagation(); openUrl(toBrowsableRepoUrl(skill.url!)); }}
           >
             <ExternalLink className="h-3 w-3" />
             查看源

@@ -116,24 +116,6 @@ export default function ClaudeCodeSettings() {
     }
   };
 
-  // 更新 API Key
-  const handleApiKeyChange = (value: string) => {
-    setSettings((prev) => ({
-      ...prev,
-      env: { ...(prev.env || {}), [ENV_API_KEY]: value },
-    }));
-    setHasChanges(true);
-  };
-
-  // 更新 Base URL
-  const handleBaseUrlChange = (value: string) => {
-    setSettings((prev) => ({
-      ...prev,
-      env: { ...(prev.env || {}), [ENV_BASE_URL]: value },
-    }));
-    setHasChanges(true);
-  };
-
   // 更新配置档案
   const handleProfilesChange = (newProfiles: ApiKeyProfile[]) => {
     setProfiles(newProfiles);
@@ -203,7 +185,7 @@ export default function ClaudeCodeSettings() {
           <Key className="h-8 w-8" />
           <div>
             <h1 className="text-2xl font-bold">API Key</h1>
-            <p className="text-muted-foreground">管理 Claude Code 的 API 配置档案</p>
+            <p className="text-muted-foreground">管理 API Key 配置</p>
           </div>
         </div>
         <div className="flex items-center gap-2">
@@ -266,8 +248,6 @@ export default function ClaudeCodeSettings() {
         currentBaseUrl={currentBaseUrl}
         onProfilesChange={handleProfilesChange}
         onActiveProfileChange={handleActiveProfileChange}
-        onApiKeyChange={handleApiKeyChange}
-        onBaseUrlChange={handleBaseUrlChange}
         onSwitchProfile={handleSwitchProfile}
         onSaveProfiles={handleSaveProfiles}
         onUseOfficialApi={handleUseOfficialApi}
