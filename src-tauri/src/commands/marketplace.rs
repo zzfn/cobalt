@@ -49,6 +49,80 @@ fn get_global_tool_skill_dirs() -> Result<Vec<PathBuf>, String> {
     Ok(dirs)
 }
 
+fn find_installed_skill_path(skill_name: &str, workspace_path: Option<&str>) -> Result<Option<PathBuf>, String> {
+    let tool_skill_dirs = if let Some(ws_path) = workspace_path {
+        get_workspace_tool_skill_dirs(ws_path)
+    } else {
+        get_global_tool_skill_dirs()?
+    };
+
+    if let Some(path) = tool_skill_dirs
+        .iter()
+        .map(|dir| dir.join(skill_name))
+        .find(|path| path.exists())
+    {
+        return Ok(Some(path));
+    }
+
+    let disabled_skills_dir = super::skills::get_disabled_skills_dir(workspace_path)?;
+    let disabled_path = disabled_skills_dir.join(skill_name);
+    if disabled_path.exists() {
+        return Ok(Some(disabled_path));
+    }
+
+    let legacy_disabled_skills_dir = super::skills::get_legacy_disabled_skills_dir(workspace_path)?;
+    let legacy_disabled_path = legacy_disabled_skills_dir.join(skill_name);
+    if legacy_disabled_path.exists() {
+        return Ok(Some(legacy_disabled_path));
+    }
+
+    Ok(None)
+}
+
+fn read_installed_skill_version(
+    skill_name: &str,
+    skill_dir: &PathBuf,
+    workspace_path: Option<&str>,
+) -> Option<String> {
+    let manifest_path = skill_dir.join(".manifest.json");
+    if manifest_path.exists() {
+        if let Ok(content) = fs::read_to_string(&manifest_path) {
+            if let Ok(manifest) = serde_json::from_str::<serde_json::Value>(&content) {
+                if let Some(version) = manifest.get("version").and_then(|v| v.as_str()) {
+                    return Some(version.to_string());
+                }
+            }
+        }
+    }
+
+    let metadata_path = skill_dir.join("metadata.json");
+    if metadata_path.exists() {
+        if let Ok(content) = fs::read_to_string(&metadata_path) {
+            if let Ok(metadata) = serde_json::from_str::<serde_json::Value>(&content) {
+                if let Some(version) = metadata.get("version").and_then(|v| v.as_str()) {
+                    return Some(version.to_string());
+                }
+            }
+        }
+    }
+
+    if workspace_path.is_none() {
+        if let Ok(registry) = super::skills::read_skill_registry() {
+            if let Some(version) = registry
+                .skills
+                .iter()
+                .find(|s| s.name == skill_name)
+                .and_then(|s| s.metadata.as_ref())
+                .and_then(|m| m.version.clone())
+            {
+                return Some(version);
+            }
+        }
+    }
+
+    None
+}
+
 /// 获取市场配置文件路径
 fn get_marketplace_config_path() -> Result<PathBuf, String> {
     Ok(get_cobalt_dir()?.join("marketplace.json"))
@@ -623,54 +697,26 @@ pub async fn refresh_all_marketplace() -> Result<Vec<MarketplaceCache>, String> 
 pub fn get_marketplace_skills(source_id: String, workspace_path: Option<String>) -> Result<MarketplaceCache, String> {
     let mut cache = read_marketplace_cache(&source_id)?;
 
-    // 根据工作区路径检查每个 skill 在所有支持工具中的安装状态
-    let tool_skill_dirs = if let Some(ref ws_path) = workspace_path {
-        get_workspace_tool_skill_dirs(ws_path)
-    } else {
-        get_global_tool_skill_dirs()?
-    };
-
-    let disabled_skills_dir = super::skills::get_disabled_skills_dir(workspace_path.as_deref())?;
-    let legacy_disabled_skills_dir = super::skills::get_legacy_disabled_skills_dir(workspace_path.as_deref())?;
-
     // 更新每个 skill 的安装状态
     for skill in &mut cache.skills {
-        let mut installed_path = tool_skill_dirs
-            .iter()
-            .map(|dir| dir.join(&skill.name))
-            .find(|path| path.exists());
-
-        if installed_path.is_none() {
-            let disabled_path = disabled_skills_dir.join(&skill.name);
-            if disabled_path.exists() {
-                installed_path = Some(disabled_path);
-            } else {
-                let legacy_disabled_path = legacy_disabled_skills_dir.join(&skill.name);
-                if legacy_disabled_path.exists() {
-                    installed_path = Some(legacy_disabled_path);
-                }
-            }
-        }
-
+        let installed_path = find_installed_skill_path(&skill.name, workspace_path.as_deref())?;
         let is_installed = installed_path.is_some();
         skill.installed = is_installed;
 
-        // 如果已安装，尝试获取已安装的版本
         if let Some(skill_dir) = installed_path {
-            // 尝试读取 metadata.json 获取版本
-            let metadata_path = skill_dir.join("metadata.json");
-            if metadata_path.exists() {
-                if let Ok(content) = std::fs::read_to_string(&metadata_path) {
-                    if let Ok(metadata) = serde_json::from_str::<serde_json::Value>(&content) {
-                        skill.installed_version = metadata.get("version")
-                            .and_then(|v| v.as_str())
-                            .map(|s| s.to_string());
-                    }
-                }
-            }
+            skill.installed_version = read_installed_skill_version(
+                &skill.name,
+                &skill_dir,
+                workspace_path.as_deref(),
+            );
         } else {
             skill.installed_version = None;
         }
+
+        skill.has_update = match (&skill.installed_version, &skill.version) {
+            (Some(installed_v), Some(latest_v)) => installed_v != latest_v,
+            _ => false,
+        };
     }
 
     Ok(cache)
@@ -685,7 +731,7 @@ pub async fn install_skill_from_marketplace(
     workspace_path: Option<String>,
     git_auth: Option<super::skills::GitAuthInput>,
 ) -> Result<String, String> {
-    use super::skills::{install_skill_from_repo, read_skill_registry, write_skill_registry};
+    use super::skills::{install_skill_from_repo, read_skill_registry, set_skill_repository, update_skill, write_skill_registry};
 
     let config = read_marketplace_config()?;
     let source = config
@@ -694,14 +740,35 @@ pub async fn install_skill_from_marketplace(
         .find(|s| s.id == source_id)
         .ok_or_else(|| format!("市场源 {} 不存在", source_id))?;
 
-    // 调用现有的安装函数，传递 workspace_path
-    let result = install_skill_from_repo(
-        source.url.clone(),
-        Some(skill_names.clone()),
-        target_tools,
-        workspace_path.clone(),
-        git_auth,
-    ).await?;
+    let mut install_targets = Vec::new();
+    let mut update_targets = Vec::new();
+
+    for skill_name in &skill_names {
+        if find_installed_skill_path(skill_name, workspace_path.as_deref())?.is_some() {
+            update_targets.push(skill_name.clone());
+        } else {
+            install_targets.push(skill_name.clone());
+        }
+    }
+
+    let mut results = Vec::new();
+
+    if !install_targets.is_empty() {
+        let result = install_skill_from_repo(
+            source.url.clone(),
+            Some(install_targets.clone()),
+            target_tools.clone(),
+            workspace_path.clone(),
+            git_auth,
+        ).await?;
+        results.push(result);
+    }
+
+    for skill_name in &update_targets {
+        set_skill_repository(skill_name.clone(), source.url.clone(), workspace_path.clone())?;
+        let result = update_skill(skill_name.clone(), workspace_path.clone()).await?;
+        results.push(format!("{}: {}", skill_name, result));
+    }
 
     // 只在全局模式下更新 metadata 中的 sourceId（因为注册表是全局的）
     if workspace_path.is_none() {
@@ -718,7 +785,11 @@ pub async fn install_skill_from_marketplace(
         write_skill_registry(registry).map_err(|e| format!("写入注册表失败: {}", e))?;
     }
 
-    Ok(result)
+    if results.is_empty() {
+        return Err("未找到可安装或更新的 Skill".to_string());
+    }
+
+    Ok(results.join("；"))
 }
 
 /// 获取内置的默认数据源
