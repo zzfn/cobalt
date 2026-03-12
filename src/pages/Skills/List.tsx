@@ -85,10 +85,12 @@ export default function SkillsList() {
       setSkills(data);
       setSkillsOrder(buildSkillsOrder(data, skillUpdates));
       setSkillsScope(currentWorkspace ? 'project' : 'global');
+      return data;
     } catch (err) {
       const message = err instanceof Error ? err.message : '加载 Skills 失败';
       setError(message);
       console.error('加载 Skills 失败:', err);
+      return [];
     } finally {
       setLoading(false);
     }
@@ -286,14 +288,29 @@ export default function SkillsList() {
     try {
       const result = await updateSkillApi(skillName, currentWorkspace?.path ?? null);
       toast.success('更新成功', { description: result });
-      await loadSkills();
-      const results = await checkAllSkillUpdates(currentWorkspace?.path ?? null, true);
-      const nextUpdates = Object.fromEntries(results.map((result) => [result.skillName, result]));
-      setSkillUpdates(nextUpdates);
-      setSkillsOrder(buildSkillsOrder(
-        await listInstalledSkills(currentWorkspace?.path ?? null),
-        nextUpdates
-      ));
+      const nextSkills = await loadSkills();
+      const checkedAt = new Date().toISOString();
+      setSkillUpdates((prev) => {
+        const nextUpdates = {
+          ...prev,
+          [skillName]: {
+            skillName,
+            checkedAt,
+            hasUpdate: false,
+            hasRepository: true,
+            hasManifest: true,
+            currentVersion: undefined,
+            latestVersion: undefined,
+            changedFiles: [],
+            newFiles: [],
+            removedFiles: [],
+            outdatedTools: [],
+            error: undefined,
+          },
+        };
+        setSkillsOrder(buildSkillsOrder(nextSkills, nextUpdates));
+        return nextUpdates;
+      });
     } catch (err) {
       console.error('更新 Skill 失败:', err);
       toast.error('更新失败', {

@@ -1250,13 +1250,11 @@ pub fn list_installed_skills(workspace_path: Option<String>) -> Result<Vec<Skill
         let ws_disabled_dir = get_disabled_skills_dir(Some(ws_path))?;
         // 获取所有 AI Tools 的工作区级别目录
         let ws_tool_dirs = get_all_tool_workspace_skills_dirs(&ws_path_buf);
-        println!("📁 [Backend] 扫描工作区 skills: {:?}", ws_skills_dir);
         (ws_skills_dir, ws_disabled_dir, ws_tool_dirs)
     } else {
         let global_skills_dir = get_skills_dir()?;
         let global_disabled_dir = get_disabled_skills_dir(None)?;
         let global_tool_dirs = get_all_tool_skills_dirs();
-        println!("🌐 [Backend] 扫描全局 skills: {:?}", global_skills_dir);
         (global_skills_dir, global_disabled_dir, global_tool_dirs)
     };
 
@@ -2407,6 +2405,14 @@ fn write_skill_update_cache(
     fs::write(&cache_path, content).map_err(|e| format!("写入 Skill 更新缓存失败: {}", e))
 }
 
+fn clear_skill_update_cache(workspace_path: Option<&str>) -> Result<(), String> {
+    let cache_path = get_skill_updates_cache_path(workspace_path)?;
+    if cache_path.exists() {
+        fs::remove_file(&cache_path).map_err(|e| format!("删除 Skill 更新缓存失败: {}", e))?;
+    }
+    Ok(())
+}
+
 fn is_skill_update_cache_fresh(cache: &SkillUpdateCacheFile) -> bool {
     let Ok(updated_at) = DateTime::parse_from_rfc3339(&cache.updated_at) else {
         return false;
@@ -3098,6 +3104,8 @@ pub async fn update_skill(skill_name: String, workspace_path: Option<String>) ->
     if backup_dir.exists() {
         let _ = fs::remove_dir_all(&backup_dir);
     }
+
+    clear_skill_update_cache(workspace_path.as_deref())?;
 
     println!("✅ [Backend] Skill '{}' 更新成功", skill_name);
     let mut message = "成功更新到最新版本".to_string();
