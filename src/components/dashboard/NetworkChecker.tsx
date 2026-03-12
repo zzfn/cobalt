@@ -35,6 +35,19 @@ function StatusDot({ status }: { status: EndpointStatus['status'] }) {
   );
 }
 
+function getLatencyClassName(latency: number | null): string {
+  if (latency === null) {
+    return 'text-muted-foreground/60';
+  }
+  if (latency < 500) {
+    return 'text-emerald-600 dark:text-emerald-400';
+  }
+  if (latency < 1500) {
+    return 'text-amber-600 dark:text-amber-400';
+  }
+  return 'text-orange-600 dark:text-orange-400';
+}
+
 export default function NetworkChecker() {
   const [endpoints, setEndpoints] = useState<EndpointStatus[]>(
     ENDPOINTS.map((e) => ({ ...e, status: 'checking', latency: null, detail: null, statusCode: null }))
@@ -106,7 +119,14 @@ export default function NetworkChecker() {
               <StatusDot status={endpoint.status} />
               <span className="text-[13px]">{endpoint.name}</span>
             </div>
-            <div className="text-[11px] text-muted-foreground/60 tabular-nums">
+            <div
+              className={cn(
+                'text-[11px] tabular-nums',
+                endpoint.status === 'reachable'
+                  ? getLatencyClassName(endpoint.latency)
+                  : 'text-muted-foreground/60'
+              )}
+            >
               {endpoint.status === 'checking' && '检测中...'}
               {endpoint.status === 'reachable' && endpoint.latency !== null && `${endpoint.latency} ms`}
               {endpoint.status === 'unreachable' && (
