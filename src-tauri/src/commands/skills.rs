@@ -619,28 +619,19 @@ pub struct SkillRegistry {
 
 #[derive(Debug, Serialize, Deserialize, Default)]
 #[serde(rename_all = "camelCase")]
-struct DisabledSkillState {
+struct LegacyDisabledSkillState {
     #[serde(default)]
     installed_by: Vec<String>,
-    #[serde(default)]
-    disabled_at: Option<String>,
 }
 
 fn get_disabled_skill_state_path(skill_dir: &PathBuf) -> PathBuf {
     skill_dir.join(".cobalt-state.json")
 }
 
-fn write_disabled_skill_state(skill_dir: &PathBuf, state: &DisabledSkillState) -> Result<(), String> {
-    let content = serde_json::to_string_pretty(state)
-        .map_err(|e| format!("序列化禁用状态失败: {}", e))?;
-    fs::write(get_disabled_skill_state_path(skill_dir), content)
-        .map_err(|e| format!("写入禁用状态失败: {}", e))
-}
-
-fn read_disabled_skill_state(skill_dir: &PathBuf) -> Result<DisabledSkillState, String> {
+fn read_legacy_disabled_skill_state(skill_dir: &PathBuf) -> Result<LegacyDisabledSkillState, String> {
     let state_path = get_disabled_skill_state_path(skill_dir);
     if !state_path.exists() {
-        return Ok(DisabledSkillState::default());
+        return Ok(LegacyDisabledSkillState::default());
     }
 
     let content = fs::read_to_string(&state_path)
@@ -700,6 +691,49 @@ fn update_registry_installation_state(
     Ok(())
 }
 
+fn get_skill_registry_path() -> Result<PathBuf, String> {
+    Ok(get_cobalt_dir()?.join("skills").join("skill-registry.json"))
+}
+
+fn get_legacy_skill_registry_path() -> Result<PathBuf, String> {
+    Ok(get_skills_dir()?.join("skill-registry.json"))
+}
+
+fn migrate_legacy_skill_registry() -> Result<(), String> {
+    let registry_path = get_skill_registry_path()?;
+    if registry_path.exists() {
+        return Ok(());
+    }
+
+    let legacy_path = get_legacy_skill_registry_path()?;
+    if !legacy_path.exists() {
+        return Ok(());
+    }
+
+    if let Some(parent) = registry_path.parent() {
+        fs::create_dir_all(parent).map_err(|e| format!("创建注册表目录失败: {}", e))?;
+    }
+
+    match fs::rename(&legacy_path, &registry_path) {
+        Ok(_) => Ok(()),
+        Err(_) => {
+            fs::copy(&legacy_path, &registry_path)
+                .map_err(|e| format!("迁移旧注册表失败: {}", e))?;
+            fs::remove_file(&legacy_path)
+                .map_err(|e| format!("清理旧注册表失败: {}", e))
+        }
+    }
+}
+
+fn get_registry_installed_by(skill_name: &str) -> Result<Vec<String>, String> {
+    Ok(read_skill_registry()?
+        .skills
+        .into_iter()
+        .find(|s| s.name == skill_name)
+        .map(|s| s.installed_by)
+        .unwrap_or_default())
+}
+
 fn reconcile_disabled_skill_copies(workspace_path: Option<&str>) -> Result<(), String> {
     let disabled_skills_dir = get_disabled_skills_dir(workspace_path)?;
     fs::create_dir_all(&disabled_skills_dir)
@@ -730,10 +764,27 @@ fn reconcile_disabled_skill_copies(workspace_path: Option<&str>) -> Result<(), S
     for skill_name in disabled_skill_names {
         let target_dir = disabled_skills_dir.join(&skill_name);
         let installed_tool_paths = get_installed_tool_skill_paths(&skill_name, workspace_path);
+        let legacy_installed_by = if target_dir.exists() {
+            read_legacy_disabled_skill_state(&target_dir)
+                .map(|state| state.installed_by)
+                .unwrap_or_default()
+        } else {
+            Vec::new()
+        };
+        let mut registry_installed_by = if workspace_path.is_none() {
+            get_registry_installed_by(&skill_name)?
+        } else {
+            Vec::new()
+        };
+
+        for tool_name in legacy_installed_by {
+            if !registry_installed_by.contains(&tool_name) {
+                registry_installed_by.push(tool_name);
+            }
+        }
 
         if target_dir.exists() {
-            let disabled_state = read_disabled_skill_state(&target_dir).unwrap_or_default();
-            if disabled_state.installed_by.is_empty() && installed_tool_paths.is_empty() {
+            if registry_installed_by.is_empty() && installed_tool_paths.is_empty() {
                 fs::remove_dir_all(&target_dir)
                     .map_err(|e| format!("删除无效禁用 Skill 失败: {}", e))?;
 
@@ -763,13 +814,7 @@ fn reconcile_disabled_skill_copies(workspace_path: Option<&str>) -> Result<(), S
             move_or_copy_skill_dir(&source_dir, &target_dir)?;
         }
 
-        let mut installed_tools = if target_dir.exists() {
-            read_disabled_skill_state(&target_dir)
-                .map(|state| state.installed_by)
-                .unwrap_or_default()
-        } else {
-            Vec::new()
-        };
+        let mut installed_tools = registry_installed_by;
 
         for (tool_name, tool_path) in installed_tool_paths {
             if !installed_tools.contains(&tool_name) {
@@ -783,17 +828,14 @@ fn reconcile_disabled_skill_copies(workspace_path: Option<&str>) -> Result<(), S
         }
 
         if target_dir.exists() {
-            write_disabled_skill_state(
-                &target_dir,
-                &DisabledSkillState {
-                    installed_by: installed_tools,
-                    disabled_at: Some(chrono::Utc::now().to_rfc3339()),
-                },
-            )?;
+            let state_path = get_disabled_skill_state_path(&target_dir);
+            if state_path.exists() {
+                let _ = fs::remove_file(state_path);
+            }
         }
 
         if workspace_path.is_none() {
-            update_registry_installation_state(&skill_name, false, Vec::new())?;
+            update_registry_installation_state(&skill_name, false, installed_tools)?;
         }
     }
 
@@ -803,7 +845,8 @@ fn reconcile_disabled_skill_copies(workspace_path: Option<&str>) -> Result<(), S
 /// 读取 skill-registry.json
 #[tauri::command]
 pub fn read_skill_registry() -> Result<SkillRegistry, String> {
-    let registry_path = get_skills_dir()?.join("skill-registry.json");
+    migrate_legacy_skill_registry()?;
+    let registry_path = get_skill_registry_path()?;
 
     if !registry_path.exists() {
         return Ok(SkillRegistry::default());
@@ -818,12 +861,11 @@ pub fn read_skill_registry() -> Result<SkillRegistry, String> {
 /// 写入 skill-registry.json
 #[tauri::command]
 pub fn write_skill_registry(registry: SkillRegistry) -> Result<(), String> {
-    let skills_dir = get_skills_dir()?;
+    let registry_path = get_skill_registry_path()?;
 
-    // 确保目录存在
-    fs::create_dir_all(&skills_dir).map_err(|e| format!("创建 skills 目录失败: {}", e))?;
-
-    let registry_path = skills_dir.join("skill-registry.json");
+    if let Some(parent) = registry_path.parent() {
+        fs::create_dir_all(parent).map_err(|e| format!("创建注册表目录失败: {}", e))?;
+    }
 
     let content = serde_json::to_string_pretty(&registry)
         .map_err(|e| format!("序列化 registry 失败: {}", e))?;
@@ -1111,11 +1153,15 @@ pub fn toggle_skill(skill_name: String, enabled: bool, workspace_path: Option<St
     if enabled {
         let source_dir = find_existing_disabled_skill_dir(&skill_name, workspace_path.as_deref())?
             .ok_or_else(|| format!("Skill '{}' 不存在于禁用 skills 目录", skill_name))?;
-        let state = read_disabled_skill_state(&source_dir)?;
-        let installed_tools = if state.installed_by.is_empty() {
-            vec!["claude-code".to_string()]
+        let installed_tools = if workspace_path.is_none() {
+            let tools = get_registry_installed_by(&skill_name)?;
+            if tools.is_empty() {
+                vec!["claude-code".to_string()]
+            } else {
+                tools
+            }
         } else {
-            state.installed_by
+            vec!["claude-code".to_string()]
         };
 
         let target_dirs = if let Some(ref ws_path) = workspace_path {
@@ -1164,13 +1210,6 @@ pub fn toggle_skill(skill_name: String, enabled: bool, workspace_path: Option<St
             .unwrap_or_else(|| installed_tool_paths[0].1.clone());
 
         move_or_copy_skill_dir(&source_dir, &target_dir)?;
-        write_disabled_skill_state(
-            &target_dir,
-            &DisabledSkillState {
-                installed_by: installed_tools.clone(),
-                disabled_at: Some(chrono::Utc::now().to_rfc3339()),
-            },
-        )?;
 
         for (_, tool_path) in installed_tool_paths {
             if tool_path == source_dir {
@@ -1183,7 +1222,7 @@ pub fn toggle_skill(skill_name: String, enabled: bool, workspace_path: Option<St
         }
 
         if workspace_path.is_none() {
-            update_registry_installation_state(&skill_name, false, Vec::new())?;
+            update_registry_installation_state(&skill_name, false, installed_tools)?;
         }
     }
 
@@ -1443,20 +1482,24 @@ pub fn list_installed_skills(workspace_path: Option<String>) -> Result<Vec<Skill
                         // 从注册表查找或创建新条目
                         let existing = registry.skills.iter().find(|s| s.name == skill_name);
 
-                        // 禁用 skill 需要优先合并 .cobalt-state.json 里的安装记录
-                        let mut installed_by = read_disabled_skill_state(&path)
-                            .map(|state| state.installed_by)
-                            .unwrap_or_default();
-
-                        for tool in skill_to_tools
-                            .get(&skill_name)
-                            .cloned()
-                            .unwrap_or_else(Vec::new)
-                        {
-                            if !installed_by.contains(&tool) {
-                                installed_by.push(tool);
+                        let installed_by = if let Some(entry) = existing {
+                            let mut tools = entry.installed_by.clone();
+                            for tool in skill_to_tools
+                                .get(&skill_name)
+                                .cloned()
+                                .unwrap_or_else(Vec::new)
+                            {
+                                if !tools.contains(&tool) {
+                                    tools.push(tool);
+                                }
                             }
-                        }
+                            tools
+                        } else {
+                            skill_to_tools
+                                .get(&skill_name)
+                                .cloned()
+                                .unwrap_or_else(Vec::new)
+                        };
 
                         if let Some(entry) = existing {
                             let mut skill_entry = entry.clone();
@@ -3004,22 +3047,10 @@ pub async fn update_skill(skill_name: String, workspace_path: Option<String>) ->
         return Err(format!("Skill '{}' 目录不存在", skill_name));
     }
 
-    let disabled_state = if is_enabled {
-        None
-    } else {
-        Some(read_disabled_skill_state(&skill_dir)?)
-    };
-
     let installed_tools = list_installed_skills(workspace_path.clone())?
         .into_iter()
         .find(|skill| skill.name == skill_name)
         .map(|skill| skill.installed_by)
-        .or_else(|| {
-            disabled_state
-                .as_ref()
-                .map(|state| state.installed_by.clone())
-                .filter(|tools| !tools.is_empty())
-        })
         .unwrap_or_else(|| vec!["claude-code".to_string()]);
 
     // 只在全局模式下读取注册表
@@ -3129,10 +3160,6 @@ pub async fn update_skill(skill_name: String, workspace_path: Option<String>) ->
         let _ = copy_dir_recursive(&backup_dir, &skill_dir);
         let _ = fs::remove_dir_all(&backup_dir);
         return Err(format!("复制新版本失败: {}", e));
-    }
-
-    if let Some(ref state) = disabled_state {
-        write_disabled_skill_state(&skill_dir, state)?;
     }
 
     // 生成新的清单文件

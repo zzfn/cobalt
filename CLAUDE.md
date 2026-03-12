@@ -70,7 +70,7 @@ React 组件
   → store (Jotai atom)
     → services (invoke Tauri IPC)
       → src-tauri/commands (Rust)
-        → 读写本地文件系统 (~/.claude/)
+        → 读写本地文件系统 (~/.cobalt/、各工具 skills 目录)
 ```
 
 ### 关键状态模式

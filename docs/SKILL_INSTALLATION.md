@@ -34,10 +34,11 @@ https://gitee.com/username/skill-name
 
 ### 安装过程
 
-1. **克隆仓库**：使用 `git clone` 将仓库克隆到 `~/.claude/skills/` 目录
+1. **克隆仓库**：使用 `git clone` 将仓库克隆到临时目录，再安装到目标工具的 skills 目录
 2. **提取信息**：
    - 从 URL 自动提取仓库名称作为 Skill ID
-   - 读取 `metadata.json`（如果存在）
+   - 解析 `SKILL.md` frontmatter
+   - 生成 `.manifest.json`
    - 获取当前 commit hash
 3. **注册 Skill**：
    - 添加到 `skill-registry.json`
@@ -52,20 +53,24 @@ https://gitee.com/username/skill-name
 ```
 skill-name/
 ├── SKILL.md          # Skill 主文件（必需）
-├── metadata.json     # 元数据（推荐）
-└── README.md         # 说明文档（可选）
+├── README.md         # 说明文档（可选）
+└── 其他资源文件
 ```
 
-#### metadata.json 示例
+推荐在 `SKILL.md` 中使用 frontmatter 提供元数据：
 
-```json
-{
-  "name": "skill-name",
-  "version": "1.0.0",
-  "description": "Skill 的简短描述",
-  "tags": ["tag1", "tag2"],
-  "targetTools": ["claude-code", "cursor"]
-}
+```md
+---
+name: skill-name
+version: 1.0.0
+description: Skill 的简短描述
+tags:
+  - tag1
+  - tag2
+allowed-tools: claude-code,cursor
+---
+
+# Skill 标题
 ```
 
 ## 错误处理
@@ -143,7 +148,7 @@ await installSkillFromRepo('https://gitee.com/user/my-skill');
 
 1. 创建 Git 仓库
 2. 添加 `SKILL.md` 文件
-3. 添加 `metadata.json`（推荐）
+3. 在 `SKILL.md` 中添加 frontmatter（推荐）
 4. 推送到远程仓库
 5. 分享仓库 URL 给其他用户
 
