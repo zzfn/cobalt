@@ -19,7 +19,7 @@ import { TargetToolsDialog } from '@/components/skills/TargetToolsDialog';
 import { RemoveFromToolsDialog } from '@/components/skills/RemoveFromToolsDialog';
 import type { SkillDetail as SkillDetailType, SkillUpdateCheckResult } from '@/types/skills';
 import { AI_TOOL_META, type AiToolType } from '@/types/skills';
-import { getSkillDetail, toggleSkill as toggleSkillApi, readSkillFile, checkSkillUpdate, applySkillToTools, removeSkillFromTools } from '@/services/skills';
+import { getSkillDetail, toggleSkill as toggleSkillApi, readSkillFile, checkSkillUpdate, updateSkill as updateSkillApi, applySkillToTools, removeSkillFromTools } from '@/services/skills';
 import { currentWorkspaceAtom } from '@/store/workspaceAtoms';
 import { logActivity } from '@/lib/activityLogger';
 import { toast } from 'sonner';
@@ -221,6 +221,7 @@ export default function SkillDetail() {
   // 更新检测状态
   const [updateCheck, setUpdateCheck] = useState<SkillUpdateCheckResult | null>(null);
   const [checkingUpdate, setCheckingUpdate] = useState(false);
+  const [updatingSkill, setUpdatingSkill] = useState(false);
 
   // 应用到其他工具状态
   const [showApplyDialog, setShowApplyDialog] = useState(false);
@@ -432,6 +433,24 @@ export default function SkillDetail() {
     }
   };
 
+  const handleUpdateSkill = async () => {
+    if (!skill) return;
+
+    setUpdatingSkill(true);
+    try {
+      const message = await updateSkillApi(skill.name, currentWorkspace?.path ?? null);
+      toast.success('更新成功', { description: message });
+      await loadSkill();
+      const result = await checkSkillUpdate(skill.name, currentWorkspace?.path ?? null);
+      setUpdateCheck(result);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : '更新失败';
+      toast.error('更新失败', { description: message });
+    } finally {
+      setUpdatingSkill(false);
+    }
+  };
+
   if (loading) {
     return (
       <div className="space-y-6 animate-in fade-in duration-300">
@@ -533,6 +552,16 @@ export default function SkillDetail() {
               {checkingUpdate ? '检查中...' : updateCheck?.hasUpdate ? '发现更新' : updateCheck ? '已检查' : '检查更新'}
             </span>
           </Button>
+          {updateCheck?.hasUpdate && (
+            <Button
+              size="sm"
+              onClick={handleUpdateSkill}
+              disabled={updatingSkill}
+            >
+              {updatingSkill ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
+              <span className="ml-2">{updatingSkill ? '更新中...' : '立即更新'}</span>
+            </Button>
+          )}
           <Button
             variant="outline"
             size="sm"
