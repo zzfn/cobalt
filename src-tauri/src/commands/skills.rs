@@ -905,15 +905,7 @@ pub fn read_skill_md(skill_name: String, workspace_path: Option<String>) -> Resu
         String::new()
     };
 
-    // 读取 metadata.json（如果存在）
-    let metadata_path = skill_dir.join("metadata.json");
-    let mut metadata: Option<SkillMetadata> = if metadata_path.exists() {
-        let meta_content = fs::read_to_string(&metadata_path)
-            .map_err(|e| format!("读取 metadata.json 失败: {}", e))?;
-        serde_json::from_str(&meta_content).ok()
-    } else {
-        None
-    };
+    let mut metadata = read_skill_metadata(&skill_dir, &skill_name);
 
     // 合并注册表中的 metadata，避免详情页与列表页来源信息不一致
     if workspace_path.is_none() {
@@ -1418,15 +1410,7 @@ pub fn list_installed_skills(workspace_path: Option<String>) -> Result<Vec<Skill
                             }
                             skills.push(skill_entry);
                         } else {
-                            // 尝试读取 metadata
-                            let metadata_path = path.join("metadata.json");
-                            let metadata: Option<SkillMetadata> = if metadata_path.exists() {
-                                fs::read_to_string(&metadata_path)
-                                    .ok()
-                                    .and_then(|c| serde_json::from_str(&c).ok())
-                            } else {
-                                None
-                            };
+                            let metadata = read_skill_metadata(&path, &skill_name);
 
                             skills.push(SkillRegistryEntry {
                                 id: skill_name.clone(),
@@ -1485,15 +1469,7 @@ pub fn list_installed_skills(workspace_path: Option<String>) -> Result<Vec<Skill
                             }
                             skills.push(skill_entry);
                         } else {
-                            // 尝试读取 metadata
-                            let metadata_path = path.join("metadata.json");
-                            let metadata: Option<SkillMetadata> = if metadata_path.exists() {
-                                fs::read_to_string(&metadata_path)
-                                    .ok()
-                                    .and_then(|c| serde_json::from_str(&c).ok())
-                            } else {
-                                None
-                            };
+                            let metadata = read_skill_metadata(&path, &skill_name);
 
                             skills.push(SkillRegistryEntry {
                                 id: skill_name.clone(),
@@ -1527,11 +1503,8 @@ pub fn list_installed_skills(workspace_path: Option<String>) -> Result<Vec<Skill
         let mut metadata: Option<SkillMetadata> = None;
         for (tool_name, tool_dir) in &tool_dirs {
             if tools.contains(&tool_name.to_string()) {
-                let metadata_path = tool_dir.join(skill_name).join("metadata.json");
-                if metadata_path.exists() {
-                    metadata = fs::read_to_string(&metadata_path)
-                        .ok()
-                        .and_then(|c| serde_json::from_str(&c).ok());
+                metadata = read_skill_metadata(&tool_dir.join(skill_name), skill_name);
+                if metadata.is_some() {
                     break;
                 }
             }
@@ -1939,16 +1912,6 @@ fn install_single_skill(
         }
     }
 
-    // 如果没有从 SKILL.md 解析到 metadata，尝试读取 metadata.json
-    if metadata.is_none() {
-        let metadata_path = first_tool_dir.join("metadata.json");
-        if metadata_path.exists() {
-            metadata = fs::read_to_string(&metadata_path)
-                .ok()
-                .and_then(|c| serde_json::from_str(&c).ok());
-        }
-    }
-
     // 更新 metadata
     if let Some(ref mut meta) = metadata {
         meta.repository = Some(repo_url.to_string());
@@ -2353,6 +2316,54 @@ fn read_skill_manifest(skill_dir: &PathBuf) -> Option<SkillManifest> {
     } else {
         None
     }
+}
+
+fn read_skill_metadata(skill_dir: &PathBuf, default_name: &str) -> Option<SkillMetadata> {
+    let skill_md_path = skill_dir.join("SKILL.md");
+    let mut metadata = if skill_md_path.exists() {
+        fs::read_to_string(&skill_md_path)
+            .ok()
+            .and_then(|content| parse_skill_frontmatter(&content, default_name))
+    } else {
+        None
+    };
+
+    if let Some(manifest) = read_skill_manifest(skill_dir) {
+        match metadata.as_mut() {
+            Some(meta) => {
+                if meta.version.is_none() && !manifest.version.is_empty() {
+                    meta.version = Some(manifest.version);
+                }
+                if meta.description.is_none() {
+                    meta.description = manifest.description;
+                }
+                if meta.repository.is_none() {
+                    meta.repository = manifest.repository;
+                }
+            }
+            None => {
+                metadata = Some(SkillMetadata {
+                    name: if manifest.name.is_empty() {
+                        default_name.to_string()
+                    } else {
+                        manifest.name
+                    },
+                    version: if manifest.version.is_empty() {
+                        None
+                    } else {
+                        Some(manifest.version)
+                    },
+                    description: manifest.description,
+                    tags: Vec::new(),
+                    target_tools: Vec::new(),
+                    repository: manifest.repository,
+                    source_id: None,
+                });
+            }
+        }
+    }
+
+    metadata
 }
 
 /// 写入 skill 的清单文件

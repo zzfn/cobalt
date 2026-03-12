@@ -95,17 +95,6 @@ fn read_installed_skill_version(
         }
     }
 
-    let metadata_path = skill_dir.join("metadata.json");
-    if metadata_path.exists() {
-        if let Ok(content) = fs::read_to_string(&metadata_path) {
-            if let Ok(metadata) = serde_json::from_str::<serde_json::Value>(&content) {
-                if let Some(version) = metadata.get("version").and_then(|v| v.as_str()) {
-                    return Some(version.to_string());
-                }
-            }
-        }
-    }
-
     if workspace_path.is_none() {
         if let Ok(registry) = super::skills::read_skill_registry() {
             if let Some(version) = registry
