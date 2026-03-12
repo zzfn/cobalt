@@ -3,12 +3,15 @@ import { RefreshCw, Loader2 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
+import { checkNetworkEndpoints } from '@/services/config';
 
 interface EndpointStatus {
   name: string;
   url: string;
   status: 'checking' | 'reachable' | 'unreachable';
   latency: number | null;
+  detail: string | null;
+  statusCode: number | null;
 }
 
 const ENDPOINTS: Pick<EndpointStatus, 'name' | 'url'>[] = [
@@ -17,19 +20,6 @@ const ENDPOINTS: Pick<EndpointStatus, 'name' | 'url'>[] = [
   { name: 'ChatGPT', url: 'https://chatgpt.com' },
   { name: 'Google', url: 'https://www.google.com' },
 ];
-
-async function checkEndpoint(url: string): Promise<{ reachable: boolean; latency: number | null }> {
-  const start = Date.now();
-  try {
-    await fetch(url, {
-      mode: 'no-cors',
-      signal: AbortSignal.timeout(8000),
-    });
-    return { reachable: true, latency: Date.now() - start };
-  } catch {
-    return { reachable: false, latency: null };
-  }
-}
 
 function StatusDot({ status }: { status: EndpointStatus['status'] }) {
   if (status === 'checking') {
@@ -47,30 +37,39 @@ function StatusDot({ status }: { status: EndpointStatus['status'] }) {
 
 export default function NetworkChecker() {
   const [endpoints, setEndpoints] = useState<EndpointStatus[]>(
-    ENDPOINTS.map((e) => ({ ...e, status: 'checking', latency: null }))
+    ENDPOINTS.map((e) => ({ ...e, status: 'checking', latency: null, detail: null, statusCode: null }))
   );
   const [checking, setChecking] = useState(false);
 
   const runChecks = useCallback(async () => {
     setChecking(true);
-    setEndpoints(ENDPOINTS.map((e) => ({ ...e, status: 'checking', latency: null })));
+    setEndpoints(ENDPOINTS.map((e) => ({ ...e, status: 'checking', latency: null, detail: null, statusCode: null })));
 
-    await Promise.all(
-      ENDPOINTS.map(async (endpoint, index) => {
-        const result = await checkEndpoint(endpoint.url);
-        setEndpoints((prev) => {
-          const next = [...prev];
-          next[index] = {
-            ...endpoint,
-            status: result.reachable ? 'reachable' : 'unreachable',
-            latency: result.latency,
-          };
-          return next;
-        });
-      })
-    );
-
-    setChecking(false);
+    try {
+      const results = await checkNetworkEndpoints(ENDPOINTS);
+      setEndpoints(
+        results.map((result) => ({
+          name: result.name,
+          url: result.url,
+          status: result.reachable ? 'reachable' : 'unreachable',
+          latency: result.latency,
+          detail: result.detail,
+          statusCode: result.statusCode,
+        }))
+      );
+    } catch {
+      setEndpoints(
+        ENDPOINTS.map((endpoint) => ({
+          ...endpoint,
+          status: 'unreachable',
+          latency: null,
+          detail: '检测服务不可用',
+          statusCode: null,
+        }))
+      );
+    } finally {
+      setChecking(false);
+    }
   }, []);
 
   useEffect(() => {
@@ -110,7 +109,11 @@ export default function NetworkChecker() {
             <div className="text-[11px] text-muted-foreground/60 tabular-nums">
               {endpoint.status === 'checking' && '检测中...'}
               {endpoint.status === 'reachable' && endpoint.latency !== null && `${endpoint.latency} ms`}
-              {endpoint.status === 'unreachable' && <span className="text-red-400">不可达</span>}
+              {endpoint.status === 'unreachable' && (
+                <span className="text-red-400" title={endpoint.detail ?? undefined}>
+                  {endpoint.detail ?? '不可达'}
+                </span>
+              )}
             </div>
           </div>
         ))}

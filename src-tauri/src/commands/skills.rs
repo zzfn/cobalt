@@ -1,5 +1,7 @@
 // Skills 管理命令
+use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
 use std::fs;
 #[cfg(unix)]
 use std::os::unix::fs::PermissionsExt;
@@ -267,6 +269,31 @@ fn get_claude_dir() -> Result<PathBuf, String> {
 /// Skills 目录路径
 fn get_skills_dir() -> Result<PathBuf, String> {
     Ok(get_claude_dir()?.join("skills"))
+}
+
+fn get_cobalt_dir() -> Result<PathBuf, String> {
+    dirs::home_dir()
+        .map(|home| home.join(".cobalt"))
+        .ok_or_else(|| "无法获取用户主目录".to_string())
+}
+
+fn get_skill_updates_cache_dir() -> Result<PathBuf, String> {
+    Ok(get_cobalt_dir()?.join(".cache").join("skill-updates"))
+}
+
+fn get_skill_updates_cache_path(workspace_path: Option<&str>) -> Result<PathBuf, String> {
+    let cache_dir = get_skill_updates_cache_dir()?;
+
+    let file_name = if let Some(path) = workspace_path {
+        use sha2::{Digest, Sha256};
+        let mut hasher = Sha256::new();
+        hasher.update(path.as_bytes());
+        format!("workspace-{:x}.json", hasher.finalize())
+    } else {
+        "global.json".to_string()
+    };
+
+    Ok(cache_dir.join(file_name))
 }
 
 /// 获取工具的相对路径配置
@@ -2055,61 +2082,164 @@ pub struct SkillUpdateCheckResult {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub removed_files: Option<Vec<String>>,
     #[serde(skip_serializing_if = "Option::is_none")]
+    pub outdated_tools: Option<Vec<String>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub error: Option<String>,
 }
 
-/// 检查 Skill 是否有更新（基于文件 hash 对比）
-#[tauri::command]
-pub async fn check_skill_update(skill_name: String, workspace_path: Option<String>) -> Result<SkillUpdateCheckResult, String> {
-    println!("🔍 [Backend] 检查 Skill '{}' 的更新", skill_name);
+#[derive(Debug, Serialize, Deserialize, Clone)]
+#[serde(rename_all = "camelCase")]
+pub struct SkillUpdateSummary {
+    pub skill_name: String,
+    pub has_update: bool,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub current_version: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub latest_version: Option<String>,
+    pub has_repository: bool,
+    pub has_manifest: bool,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub changed_files: Option<Vec<String>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub new_files: Option<Vec<String>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub removed_files: Option<Vec<String>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub outdated_tools: Option<Vec<String>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub error: Option<String>,
+    pub checked_at: String,
+}
 
-    // 获取 skill 目录
-    let (skills_dir, disabled_skills_dir) = if let Some(ref ws_path) = workspace_path {
+#[derive(Debug, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct SkillUpdateCacheFile {
+    updated_at: String,
+    results: Vec<SkillUpdateSummary>,
+}
+
+struct LocalSkillUpdateContext {
+    skill_name: String,
+    current_version: Option<String>,
+    local_tools: Vec<InstalledToolLocalContext>,
+    repo_url: Option<String>,
+}
+
+struct InstalledToolLocalContext {
+    tool_name: String,
+    has_manifest: bool,
+    local_manifest: Option<SkillManifest>,
+}
+
+const SKILL_UPDATE_CACHE_TTL_HOURS: i64 = 6;
+
+fn read_skill_update_cache(workspace_path: Option<&str>) -> Result<Option<SkillUpdateCacheFile>, String> {
+    let cache_path = get_skill_updates_cache_path(workspace_path)?;
+    if !cache_path.exists() {
+        return Ok(None);
+    }
+
+    let content = fs::read_to_string(&cache_path)
+        .map_err(|e| format!("读取 Skill 更新缓存失败: {}", e))?;
+
+    let cache = serde_json::from_str(&content)
+        .map_err(|e| format!("解析 Skill 更新缓存失败: {}", e))?;
+
+    Ok(Some(cache))
+}
+
+fn write_skill_update_cache(
+    workspace_path: Option<&str>,
+    results: &[SkillUpdateSummary],
+) -> Result<(), String> {
+    let cache_dir = get_skill_updates_cache_dir()?;
+    fs::create_dir_all(&cache_dir).map_err(|e| format!("创建 Skill 更新缓存目录失败: {}", e))?;
+
+    let cache_path = get_skill_updates_cache_path(workspace_path)?;
+    let cache = SkillUpdateCacheFile {
+        updated_at: Utc::now().to_rfc3339(),
+        results: results.to_vec(),
+    };
+
+    let content = serde_json::to_string_pretty(&cache)
+        .map_err(|e| format!("序列化 Skill 更新缓存失败: {}", e))?;
+
+    fs::write(&cache_path, content).map_err(|e| format!("写入 Skill 更新缓存失败: {}", e))
+}
+
+fn is_skill_update_cache_fresh(cache: &SkillUpdateCacheFile) -> bool {
+    let Ok(updated_at) = DateTime::parse_from_rfc3339(&cache.updated_at) else {
+        return false;
+    };
+
+    Utc::now()
+        .signed_duration_since(updated_at.with_timezone(&Utc))
+        .num_hours()
+        < SKILL_UPDATE_CACHE_TTL_HOURS
+}
+
+fn resolve_local_skill_tool_dirs(
+    skill_name: &str,
+    workspace_path: Option<&str>,
+) -> Result<Vec<(String, PathBuf)>, String> {
+    let (skills_dir, disabled_skills_dir, all_tool_dirs) = if let Some(ws_path) = workspace_path {
         let ws_path_buf = PathBuf::from(ws_path);
         (
             ws_path_buf.join(".claude").join("skills"),
-            ws_path_buf.join(".claude").join(".disabled_skills")
+            ws_path_buf.join(".claude").join(".disabled_skills"),
+            get_all_tool_workspace_skills_dirs(&ws_path_buf),
         )
     } else {
         (
             get_skills_dir()?,
-            get_claude_dir()?.join(".disabled_skills")
+            get_claude_dir()?.join(".disabled_skills"),
+            get_all_tool_skills_dirs(),
         )
     };
-    let skill_dir = if skills_dir.join(&skill_name).exists() {
-        skills_dir.join(&skill_name)
-    } else if disabled_skills_dir.join(&skill_name).exists() {
-        disabled_skills_dir.join(&skill_name)
-    } else {
-        return Err(format!("Skill '{}' 不存在", skill_name));
-    };
 
-    // 工作区模式不使用全局注册表
+    let mut tool_paths = Vec::new();
+    for (tool_name, tool_dir) in all_tool_dirs {
+        let tool_skill_dir = tool_dir.join(skill_name);
+        if tool_skill_dir.exists() {
+            tool_paths.push((tool_name.to_string(), tool_skill_dir));
+        }
+    }
+
+    if !tool_paths.iter().any(|(tool_name, _)| tool_name == "claude-code") {
+        let disabled_skill_dir = disabled_skills_dir.join(skill_name);
+        if disabled_skill_dir.exists() {
+            tool_paths.push(("claude-code".to_string(), disabled_skill_dir));
+        } else if skills_dir.join(skill_name).exists() {
+            tool_paths.push(("claude-code".to_string(), skills_dir.join(skill_name)));
+        }
+    }
+
+    if tool_paths.is_empty() {
+        return Err(format!("Skill '{}' 不存在", skill_name));
+    }
+
+    Ok(tool_paths)
+}
+
+fn resolve_skill_repository(skill_dir: &PathBuf, skill_name: &str, workspace_path: Option<&str>) -> Option<String> {
     let entry = if workspace_path.is_none() {
-        let registry = read_skill_registry()?;
-        registry
-            .skills
-            .iter()
-            .find(|s| s.name == skill_name)
-            .cloned()
+        read_skill_registry().ok().and_then(|registry| {
+            registry
+                .skills
+                .iter()
+                .find(|s| s.name == skill_name)
+                .cloned()
+        })
     } else {
         None
     };
 
-    // 读取本地清单文件
-    let local_manifest = read_skill_manifest(&skill_dir);
-
-    // 获取 repository URL - 优先从注册表，然后尝试读取 .manifest.json，最后尝试 SKILL.md
-    let repo_url = entry
+    entry
         .as_ref()
         .and_then(|e| e.metadata.as_ref())
         .and_then(|m| m.repository.clone())
+        .or_else(|| read_skill_manifest(skill_dir).and_then(|m| m.repository))
         .or_else(|| {
-            // 尝试从 .manifest.json 读取
-            read_skill_manifest(&skill_dir).and_then(|m| m.repository)
-        })
-        .or_else(|| {
-            // 尝试从 SKILL.md 的 frontmatter 读取
             let skill_md = skill_dir.join("SKILL.md");
             if skill_md.exists() {
                 fs::read_to_string(&skill_md)
@@ -2119,34 +2249,184 @@ pub async fn check_skill_update(skill_name: String, workspace_path: Option<Strin
             } else {
                 None
             }
-        });
+        })
+}
 
-    let current_version = entry
-        .as_ref()
-        .and_then(|e| e.metadata.as_ref())
-        .and_then(|m| m.version.clone())
-        .or_else(|| local_manifest.as_ref().map(|m| m.version.clone()));
+fn resolve_local_skill_update_context(
+    skill_name: &str,
+    workspace_path: Option<&str>,
+) -> Result<LocalSkillUpdateContext, String> {
+    let tool_dirs = resolve_local_skill_tool_dirs(skill_name, workspace_path)?;
+    let local_tools: Vec<InstalledToolLocalContext> = tool_dirs
+        .iter()
+        .map(|(tool_name, skill_dir)| {
+            let local_manifest = read_skill_manifest(skill_dir)
+                .or_else(|| generate_skill_manifest(skill_dir, None).ok());
+            InstalledToolLocalContext {
+                tool_name: tool_name.clone(),
+                has_manifest: local_manifest.is_some(),
+                local_manifest,
+            }
+        })
+        .collect();
 
-    // 如果没有仓库信息，返回提示
-    let repo_url = match repo_url {
-        Some(url) => url,
-        None => {
-            return Ok(SkillUpdateCheckResult {
-                has_update: false,
-                current_version,
-                latest_version: None,
-                has_repository: false,
-                has_manifest: false,
-                changed_files: None,
-                new_files: None,
-                removed_files: None,
-                error: Some("该 Skill 没有配置仓库信息。请创建 .manifest.json 文件并添加 repository 字段。".to_string()),
-            });
+    let current_version = if workspace_path.is_none() {
+        read_skill_registry()
+            .ok()
+            .and_then(|registry| {
+                registry
+                    .skills
+                    .iter()
+                    .find(|s| s.name == skill_name)
+                    .and_then(|entry| entry.metadata.as_ref())
+                    .and_then(|metadata| metadata.version.clone())
+            })
+            .or_else(|| {
+                let versions: Vec<String> = local_tools
+                    .iter()
+                    .filter_map(|tool| tool.local_manifest.as_ref().map(|manifest| manifest.version.clone()))
+                    .collect();
+                let unique_versions: std::collections::HashSet<String> = versions.iter().cloned().collect();
+                if unique_versions.len() == 1 {
+                    versions.first().cloned()
+                } else {
+                    None
+                }
+            })
+    } else {
+        let versions: Vec<String> = local_tools
+            .iter()
+            .filter_map(|tool| tool.local_manifest.as_ref().map(|manifest| manifest.version.clone()))
+            .collect();
+        let unique_versions: std::collections::HashSet<String> = versions.iter().cloned().collect();
+        if unique_versions.len() == 1 {
+            versions.first().cloned()
+        } else {
+            None
         }
     };
 
-    // 创建临时目录用于克隆远程仓库
-    let temp_dir = std::env::temp_dir().join(format!("cobalt-skill-check-{}", skill_name));
+    let repo_url = tool_dirs
+        .iter()
+        .find_map(|(_, skill_dir)| resolve_skill_repository(skill_dir, skill_name, workspace_path));
+
+    Ok(LocalSkillUpdateContext {
+        skill_name: skill_name.to_string(),
+        current_version,
+        local_tools,
+        repo_url,
+    })
+}
+
+fn create_update_result_from_context(
+    context: &LocalSkillUpdateContext,
+    remote_manifest: Option<&SkillManifest>,
+    error: Option<String>,
+) -> SkillUpdateCheckResult {
+    if let Some(error) = error {
+        return SkillUpdateCheckResult {
+            has_update: false,
+            current_version: context.current_version.clone(),
+            latest_version: None,
+            has_repository: context.repo_url.is_some(),
+            has_manifest: context.local_tools.iter().any(|tool| tool.has_manifest),
+            changed_files: None,
+            new_files: None,
+            removed_files: None,
+            outdated_tools: None,
+            error: Some(error),
+        };
+    }
+    let mut changed_files = std::collections::HashSet::new();
+    let mut new_files = std::collections::HashSet::new();
+    let mut removed_files = std::collections::HashSet::new();
+    let mut outdated_tools = Vec::new();
+
+    for tool in &context.local_tools {
+        let comparison_result = compare_manifests(tool.local_manifest.as_ref(), remote_manifest);
+        if comparison_result.has_changes {
+            outdated_tools.push(tool.tool_name.clone());
+            changed_files.extend(comparison_result.changed);
+            new_files.extend(comparison_result.new);
+            removed_files.extend(comparison_result.removed);
+        }
+    }
+
+    let mut changed_files: Vec<String> = changed_files.into_iter().collect();
+    let mut new_files: Vec<String> = new_files.into_iter().collect();
+    let mut removed_files: Vec<String> = removed_files.into_iter().collect();
+    changed_files.sort();
+    new_files.sort();
+    removed_files.sort();
+    outdated_tools.sort();
+
+    SkillUpdateCheckResult {
+        has_update: !outdated_tools.is_empty(),
+        current_version: context.current_version.clone(),
+        latest_version: remote_manifest.map(|manifest| manifest.version.clone()),
+        has_repository: true,
+        has_manifest: context.local_tools.iter().any(|tool| tool.has_manifest),
+        changed_files: Some(changed_files),
+        new_files: Some(new_files),
+        removed_files: Some(removed_files),
+        outdated_tools: Some(outdated_tools),
+        error: None,
+    }
+}
+
+fn find_remote_skill_dir(repo_dir: &PathBuf, skill_name: &str) -> Result<PathBuf, String> {
+    if repo_dir.join("skills").exists() {
+        let skills_subdir = repo_dir.join("skills");
+        let target = skills_subdir.join(skill_name);
+        if target.exists() {
+            return Ok(target);
+        }
+
+        let entries = fs::read_dir(&skills_subdir)
+            .map_err(|e| format!("读取 skills 子目录失败: {}", e))?;
+        for entry in entries.flatten() {
+            let path = entry.path();
+            if path.is_dir() && path.join("SKILL.md").exists() {
+                let name = path.file_name().and_then(|n| n.to_str()).unwrap_or("");
+                if name.replace("-", "_") == skill_name.replace("-", "_") {
+                    return Ok(path);
+                }
+            }
+        }
+
+        Err(format!("在仓库的 skills/ 目录中找不到 skill '{}'", skill_name))
+    } else if repo_dir.join("SKILL.md").exists() {
+        Ok(repo_dir.clone())
+    } else {
+        Err(format!("仓库中找不到 skill '{}'", skill_name))
+    }
+}
+
+fn repo_temp_dir(prefix: &str, key: &str) -> PathBuf {
+    use sha2::{Digest, Sha256};
+    let mut hasher = Sha256::new();
+    hasher.update(key.as_bytes());
+    std::env::temp_dir().join(format!("{}-{:x}", prefix, hasher.finalize()))
+}
+
+/// 检查 Skill 是否有更新（基于文件 hash 对比）
+#[tauri::command]
+pub async fn check_skill_update(skill_name: String, workspace_path: Option<String>) -> Result<SkillUpdateCheckResult, String> {
+    println!("🔍 [Backend] 检查 Skill '{}' 的更新", skill_name);
+
+    let context = resolve_local_skill_update_context(&skill_name, workspace_path.as_deref())?;
+    let repo_url = match context.repo_url.clone() {
+        Some(url) => url,
+        None => {
+            return Ok(create_update_result_from_context(
+                &context,
+                None,
+                Some("该 Skill 没有配置仓库信息。请创建 .manifest.json 文件并添加 repository 字段。".to_string()),
+            ));
+        }
+    };
+
+    let temp_dir = repo_temp_dir("cobalt-skill-check", &format!("{}:{}", repo_url, skill_name));
     if temp_dir.exists() {
         let _ = fs::remove_dir_all(&temp_dir);
     }
@@ -2154,106 +2434,132 @@ pub async fn check_skill_update(skill_name: String, workspace_path: Option<Strin
     // 克隆仓库（浅克隆，HTTPS 失败会自动尝试 SSH）
     println!("📡 [Backend] 克隆远程仓库: {}", repo_url);
     if let Err(e) = clone_repo(&repo_url, temp_dir.to_str().unwrap(), true, None) {
-        return Ok(SkillUpdateCheckResult {
-            has_update: false,
-            current_version,
-            latest_version: None,
-            has_repository: true,
-            has_manifest: local_manifest.is_some(),
-            changed_files: None,
-            new_files: None,
-            removed_files: None,
-            error: Some(e),
-        });
+        return Ok(create_update_result_from_context(&context, None, Some(e)));
     }
 
-    // 确定远程 skill 目录
-    let remote_skill_dir = if temp_dir.join("skills").exists() {
-        let skills_subdir = temp_dir.join("skills");
-        // 查找与当前 skill 同名的目录
-        let target = skills_subdir.join(&skill_name);
-        if target.exists() {
-            target
-        } else {
-            // 尝试查找包含 SKILL.md 的子目录（允许名称差异）
-            let entries = fs::read_dir(&skills_subdir)
-                .map_err(|e| format!("读取 skills 子目录失败: {}", e))?;
-            let mut found = None;
-            for entry in entries.flatten() {
-                let path = entry.path();
-                if path.is_dir() && path.join("SKILL.md").exists() {
-                    // 检查是否匹配（允许 skill-name 和 skill_name 的差异）
-                    let name = path.file_name().and_then(|n| n.to_str()).unwrap_or("");
-                    if name.replace("-", "_") == skill_name.replace("-", "_") {
-                        found = Some(path);
-                        break;
-                    }
-                }
-            }
-            // 如果在 skills/ 子目录中找不到，返回错误
-            match found {
-                Some(path) => path,
-                None => {
-                    let _ = fs::remove_dir_all(&temp_dir);
-                    return Ok(SkillUpdateCheckResult {
-                        has_update: false,
-                        current_version,
-                        latest_version: None,
-                        has_repository: true,
-                        has_manifest: local_manifest.is_some(),
-                        changed_files: None,
-                        new_files: None,
-                        removed_files: None,
-                        error: Some(format!("在仓库的 skills/ 目录中找不到 skill '{}'", skill_name)),
-                    });
-                }
-            }
+    let remote_skill_dir = match find_remote_skill_dir(&temp_dir, &skill_name) {
+        Ok(path) => path,
+        Err(error) => {
+            let _ = fs::remove_dir_all(&temp_dir);
+            return Ok(create_update_result_from_context(&context, None, Some(error)));
         }
-    } else if temp_dir.join("SKILL.md").exists() {
-        // 整个仓库就是一个 skill
-        temp_dir.clone()
-    } else {
-        // 既没有 skills 子目录，也不是单个 skill
-        let _ = fs::remove_dir_all(&temp_dir);
-        return Ok(SkillUpdateCheckResult {
-            has_update: false,
-            current_version,
-            latest_version: None,
-            has_repository: true,
-            has_manifest: local_manifest.is_some(),
-            changed_files: None,
-            new_files: None,
-            removed_files: None,
-            error: Some(format!("仓库中找不到 skill '{}'", skill_name)),
-        });
     };
 
     // 生成远程清单
     println!("📋 [Backend] 生成远程清单，目录: {:?}", remote_skill_dir);
     let remote_manifest = generate_skill_manifest(&remote_skill_dir, Some(&repo_url)).ok();
 
-    // 对比本地和远程清单
-    println!("🔍 [Backend] 对比本地和远程清单");
-    println!("   本地清单: {:?}", local_manifest.as_ref().map(|m| format!("version={}, files={}", m.version, m.files.len())));
-    println!("   远程清单: {:?}", remote_manifest.as_ref().map(|m| format!("version={}, files={}", m.version, m.files.len())));
-    let comparison_result = compare_manifests(local_manifest.as_ref(), remote_manifest.as_ref());
-
     // 清理临时目录
     if temp_dir.exists() {
         let _ = fs::remove_dir_all(&temp_dir);
     }
 
-    Ok(SkillUpdateCheckResult {
-        has_update: comparison_result.has_changes,
-        current_version,
-        latest_version: remote_manifest.as_ref().map(|m| m.version.clone()),
-        has_repository: true,
-        has_manifest: local_manifest.is_some(),
-        changed_files: Some(comparison_result.changed),
-        new_files: Some(comparison_result.new),
-        removed_files: Some(comparison_result.removed),
-        error: None,
-    })
+    Ok(create_update_result_from_context(&context, remote_manifest.as_ref(), None))
+}
+
+#[tauri::command]
+pub async fn check_all_skill_updates(
+    workspace_path: Option<String>,
+    force: Option<bool>,
+) -> Result<Vec<SkillUpdateSummary>, String> {
+    let skills = list_installed_skills(workspace_path.clone())?;
+    let skill_names: Vec<String> = skills.iter().map(|skill| skill.name.clone()).collect();
+    let mut sorted_skill_names = skill_names.clone();
+    sorted_skill_names.sort();
+
+    let force = force.unwrap_or(false);
+    if !force {
+        if let Some(cache) = read_skill_update_cache(workspace_path.as_deref())? {
+            let mut cached_skill_names: Vec<String> = cache
+                .results
+                .iter()
+                .map(|result| result.skill_name.clone())
+                .collect();
+            cached_skill_names.sort();
+
+            if is_skill_update_cache_fresh(&cache) && cached_skill_names == sorted_skill_names {
+                return Ok(cache.results);
+            }
+        }
+    }
+
+    let mut results = Vec::with_capacity(skills.len());
+    let mut repo_groups: HashMap<String, Vec<LocalSkillUpdateContext>> = HashMap::new();
+
+    for skill in skills {
+        let context = resolve_local_skill_update_context(&skill.name, workspace_path.as_deref())?;
+        if let Some(repo_url) = context.repo_url.clone() {
+            repo_groups.entry(repo_url).or_default().push(context);
+        } else {
+            let result = create_update_result_from_context(
+                &context,
+                None,
+                Some("该 Skill 没有配置仓库信息。请创建 .manifest.json 文件并添加 repository 字段。".to_string()),
+            );
+            results.push(SkillUpdateSummary {
+                skill_name: context.skill_name,
+                has_update: result.has_update,
+                current_version: result.current_version,
+                latest_version: result.latest_version,
+                has_repository: result.has_repository,
+                has_manifest: result.has_manifest,
+                changed_files: result.changed_files,
+                new_files: result.new_files,
+                removed_files: result.removed_files,
+                outdated_tools: result.outdated_tools,
+                error: result.error,
+                checked_at: chrono::Utc::now().to_rfc3339(),
+            });
+        }
+    }
+
+    for (repo_url, contexts) in repo_groups {
+        let temp_dir = repo_temp_dir("cobalt-skill-batch-check", &repo_url);
+        if temp_dir.exists() {
+            let _ = fs::remove_dir_all(&temp_dir);
+        }
+
+        let clone_result = clone_repo(&repo_url, temp_dir.to_str().unwrap(), true, None);
+
+        for context in contexts {
+            let result = if let Err(error) = &clone_result {
+                create_update_result_from_context(&context, None, Some(error.clone()))
+            } else {
+                match find_remote_skill_dir(&temp_dir, &context.skill_name) {
+                    Ok(remote_skill_dir) => {
+                        let remote_manifest = generate_skill_manifest(&remote_skill_dir, Some(&repo_url)).ok();
+                        create_update_result_from_context(&context, remote_manifest.as_ref(), None)
+                    }
+                    Err(error) => create_update_result_from_context(&context, None, Some(error)),
+                }
+            };
+
+            results.push(SkillUpdateSummary {
+                skill_name: context.skill_name,
+                has_update: result.has_update,
+                current_version: result.current_version,
+                latest_version: result.latest_version,
+                has_repository: result.has_repository,
+                has_manifest: result.has_manifest,
+                changed_files: result.changed_files,
+                new_files: result.new_files,
+                removed_files: result.removed_files,
+                outdated_tools: result.outdated_tools,
+                error: result.error,
+                checked_at: chrono::Utc::now().to_rfc3339(),
+            });
+        }
+
+        if temp_dir.exists() {
+            let _ = fs::remove_dir_all(&temp_dir);
+        }
+    }
+
+    results.sort_by(|a, b| a.skill_name.cmp(&b.skill_name));
+
+    write_skill_update_cache(workspace_path.as_deref(), &results)?;
+
+    Ok(results)
 }
 
 /// 清单对比结果
@@ -2338,6 +2644,12 @@ pub async fn update_skill(skill_name: String, workspace_path: Option<String>) ->
     if !skill_dir.exists() {
         return Err(format!("Skill '{}' 目录不存在", skill_name));
     }
+
+    let installed_tools = list_installed_skills(workspace_path.clone())?
+        .into_iter()
+        .find(|skill| skill.name == skill_name)
+        .map(|skill| skill.installed_by)
+        .unwrap_or_else(|| vec!["claude-code".to_string()]);
 
     // 只在全局模式下读取注册表
     let (_entry, repo_url_from_registry) = if workspace_path.is_none() {
@@ -2452,6 +2764,45 @@ pub async fn update_skill(skill_name: String, workspace_path: Option<String>) ->
     let new_manifest = generate_skill_manifest(&skill_dir, Some(&repo_url))?;
     write_skill_manifest(&skill_dir, &new_manifest)?;
 
+    let all_tool_dirs = if let Some(ref ws_path) = workspace_path {
+        let ws_path_buf = PathBuf::from(ws_path);
+        get_all_tool_workspace_skills_dirs(&ws_path_buf)
+    } else {
+        get_all_tool_skills_dirs()
+    };
+
+    let mut synced_tools = Vec::new();
+    let mut failed_tools = Vec::new();
+
+    for tool_name in installed_tools {
+        if tool_name == "claude-code" {
+            continue;
+        }
+
+        let Some((_, tool_skills_dir)) = all_tool_dirs.iter().find(|(name, _)| *name == tool_name.as_str()) else {
+            failed_tools.push(format!("{}（未知工具目录）", tool_name));
+            continue;
+        };
+
+        if let Err(e) = fs::create_dir_all(tool_skills_dir) {
+            failed_tools.push(format!("{}（创建目录失败: {}）", tool_name, e));
+            continue;
+        }
+
+        let target_dir = tool_skills_dir.join(&skill_name);
+        if target_dir.exists() {
+            if let Err(e) = fs::remove_dir_all(&target_dir) {
+                failed_tools.push(format!("{}（清理旧版本失败: {}）", tool_name, e));
+                continue;
+            }
+        }
+
+        match copy_dir_recursive(&skill_dir, &target_dir) {
+            Ok(_) => synced_tools.push(tool_name),
+            Err(e) => failed_tools.push(format!("{}（同步失败: {}）", tool_name, e)),
+        }
+    }
+
     // 只在全局模式下更新注册表
     if workspace_path.is_none() {
         let mut registry = read_skill_registry()?;
@@ -2494,7 +2845,14 @@ pub async fn update_skill(skill_name: String, workspace_path: Option<String>) ->
     }
 
     println!("✅ [Backend] Skill '{}' 更新成功", skill_name);
-    Ok("成功更新到最新版本".to_string())
+    let mut message = "成功更新到最新版本".to_string();
+    if !synced_tools.is_empty() {
+        message.push_str(&format!("；已同步到 {} 个工具: {}", synced_tools.len(), synced_tools.join(", ")));
+    }
+    if !failed_tools.is_empty() {
+        message.push_str(&format!("；{} 个工具同步失败: {}", failed_tools.len(), failed_tools.join(", ")));
+    }
+    Ok(message)
 }
 
 /// 设置 Skill 的仓库地址

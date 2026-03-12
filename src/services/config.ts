@@ -1,7 +1,7 @@
 // 配置服务 - 封装 Tauri 后端调用
 import { invoke } from '@tauri-apps/api/core';
 import type { ClaudeCodeSettings, ApiKeyProfile } from '@/types/settings';
-import type { DashboardStats, ConfigHealth, ActivityRecord } from '@/types/dashboard';
+import type { DashboardStats, ConfigHealth, ActivityRecord, NetworkCheckResult } from '@/types/dashboard';
 import { listInstalledSkills } from './skills';
 
 // 备份信息
@@ -232,4 +232,10 @@ export async function detectEnvConflicts(): Promise<EnvConflict[]> {
  */
 export async function removeEnvFromShell(conflicts: EnvConflict[]): Promise<string[]> {
   return invoke<string[]>('remove_env_from_shell', { conflicts });
+}
+
+export async function checkNetworkEndpoints(
+  targets: Array<{ name: string; url: string }>
+): Promise<NetworkCheckResult[]> {
+  return invoke<NetworkCheckResult[]>('check_network_endpoints', { targets });
 }

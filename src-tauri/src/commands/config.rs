@@ -1,8 +1,10 @@
 // 配置文件管理命令
 use chrono::Local;
+use reqwest::Client;
 use serde::{Deserialize, Serialize};
 use std::fs;
 use std::path::PathBuf;
+use std::time::Duration;
 
 /// Claude 配置目录路径
 fn get_claude_dir() -> Result<PathBuf, String> {
@@ -286,6 +288,88 @@ pub fn clear_api_config() -> Result<(), String> {
     write_api_profiles(profiles)?;
 
     Ok(())
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct NetworkCheckTarget {
+    pub name: String,
+    pub url: String,
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct NetworkCheckResult {
+    pub name: String,
+    pub url: String,
+    pub reachable: bool,
+    pub latency: Option<u128>,
+    pub detail: Option<String>,
+    pub status_code: Option<u16>,
+}
+
+fn classify_network_error(error: &reqwest::Error) -> String {
+    if error.is_timeout() {
+        "请求超时".to_string()
+    } else if error.is_connect() {
+        "连接失败".to_string()
+    } else if error.is_request() {
+        "请求构造失败".to_string()
+    } else if error.is_redirect() {
+        "重定向异常".to_string()
+    } else if error.is_body() || error.is_decode() {
+        "响应处理失败".to_string()
+    } else {
+        error.to_string()
+    }
+}
+
+async fn check_single_target(client: &Client, target: NetworkCheckTarget) -> NetworkCheckResult {
+    let started_at = std::time::Instant::now();
+
+    match client.get(&target.url).send().await {
+        Ok(response) => {
+            let status = response.status();
+            let reachable = true;
+
+            NetworkCheckResult {
+                name: target.name,
+                url: target.url,
+                reachable,
+                latency: Some(started_at.elapsed().as_millis()),
+                detail: if status.is_success() { None } else { Some(format!("HTTP {}", status.as_u16())) },
+                status_code: Some(status.as_u16()),
+            }
+        }
+        Err(error) => NetworkCheckResult {
+            name: target.name,
+            url: target.url,
+            reachable: false,
+            latency: None,
+            detail: Some(classify_network_error(&error)),
+            status_code: None,
+        },
+    }
+}
+
+#[tauri::command]
+pub async fn check_network_endpoints(
+    targets: Vec<NetworkCheckTarget>,
+) -> Result<Vec<NetworkCheckResult>, String> {
+    let client = Client::builder()
+        .connect_timeout(Duration::from_secs(5))
+        .timeout(Duration::from_secs(8))
+        .redirect(reqwest::redirect::Policy::limited(5))
+        .user_agent("cobalt-network-check/1.0")
+        .build()
+        .map_err(|e| format!("创建 HTTP 客户端失败: {}", e))?;
+
+    let mut results = Vec::with_capacity(targets.len());
+    for target in targets {
+        results.push(check_single_target(&client, target).await);
+    }
+
+    Ok(results)
 }
 
 /// 对话记录

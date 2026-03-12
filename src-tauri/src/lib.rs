@@ -7,9 +7,10 @@ use commands::{
     // 配置命令
     backup_config, clear_api_config, detect_env_conflicts, get_claude_config_dir, read_api_profiles, read_claude_json, read_claude_md,
     read_conversation_history, read_settings, remove_env_from_shell, switch_api_profile, update_env_vars,
+    check_network_endpoints,
     write_api_profiles, write_claude_json, write_claude_md, write_settings,
     // Skills 命令
-    check_skill_update, create_skill, install_skill_from_repo, list_installed_skills,
+    check_all_skill_updates, check_skill_update, create_skill, install_skill_from_repo, list_installed_skills,
     list_skill_files, read_skill_file, read_skill_md, read_skill_registry, scan_repo_skills,
     set_skill_repository, toggle_skill, uninstall_skill, update_skill, write_skill_registry,
     apply_skill_to_tools, remove_skill_from_tools, get_supported_ai_tools,
@@ -102,6 +103,7 @@ pub fn run() {
             read_conversation_history,
             detect_env_conflicts,
             remove_env_from_shell,
+            check_network_endpoints,
             // Skills 命令
             read_skill_registry,
             write_skill_registry,
@@ -114,6 +116,7 @@ pub fn run() {
             scan_repo_skills,
             install_skill_from_repo,
             create_skill,
+            check_all_skill_updates,
             check_skill_update,
             update_skill,
             set_skill_repository,

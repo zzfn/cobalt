@@ -146,6 +146,7 @@ export interface SkillFilter {
   targetTool?: AiToolType | 'all';  // 按适用工具过滤
   enabled?: boolean;
   tags?: string[];
+  updateOnly?: boolean;
 }
 
 /**
@@ -170,7 +171,14 @@ export interface SkillUpdateCheckResult {
   newFiles?: string[];
   /** 删除的文件列表 */
   removedFiles?: string[];
+  /** 落后于远端的工具 */
+  outdatedTools?: string[];
   error?: string;
+}
+
+export interface SkillUpdateSummary extends SkillUpdateCheckResult {
+  skillName: string;
+  checkedAt: string;
 }
 
 /**

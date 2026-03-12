@@ -4,6 +4,7 @@ import type {
   SkillDetail,
   SkillFilter,
   SkillSortOption,
+  SkillUpdateSummary,
 } from '@/types/skills';
 import type { WorkspaceScope } from '@/types/workspace';
 
@@ -19,6 +20,7 @@ export const skillsFilterAtom = atom<SkillFilter>({
   targetTool: 'all',
   enabled: undefined,
   tags: [],
+  updateOnly: false,
 });
 
 // Skills 排序
@@ -34,10 +36,17 @@ export const skillsErrorAtom = atom<string | null>(null);
 // Skills 范围（全局或项目）- 用于 UI 显示
 export const skillsScopeAtom = atom<WorkspaceScope>('global');
 
+// Skill 更新状态
+export const skillUpdatesAtom = atom<Record<string, SkillUpdateSummary>>({});
+
+// 批量检查更新状态
+export const skillUpdatesCheckingAtom = atom<boolean>(false);
+
 // 派生 atom：过滤后的 Skills 列表
 export const filteredSkillsAtom = atom((get) => {
   const skills = get(skillsListAtom);
   const filter = get(skillsFilterAtom);
+  const skillUpdates = get(skillUpdatesAtom);
   const sortBy = get(skillsSortByAtom);
   const sortOrder = get(skillsSortOrderAtom);
 
@@ -70,6 +79,11 @@ export const filteredSkillsAtom = atom((get) => {
     filtered = filtered.filter((skill) =>
       filter.tags!.some((tag) => skill.metadata.tags?.includes(tag))
     );
+  }
+
+  // 仅看可更新
+  if (filter.updateOnly) {
+    filtered = filtered.filter((skill) => skillUpdates[skill.name]?.hasUpdate);
   }
 
   // 排序

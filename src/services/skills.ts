@@ -4,6 +4,7 @@ import type {
   SkillRegistryEntry,
   SkillDetail,
   SkillUpdateCheckResult,
+  SkillUpdateSummary,
   AiToolType,
   GitAuthInput,
   GitAuthChallenge,
@@ -251,6 +252,19 @@ export async function createSkill(params: CreateSkillParams): Promise<string> {
  */
 export async function checkSkillUpdate(skillName: string, workspacePath?: string | null): Promise<SkillUpdateCheckResult> {
   return invoke<SkillUpdateCheckResult>('check_skill_update', { skillName, workspacePath: workspacePath ?? null });
+}
+
+/**
+ * 批量检查所有 Skill 是否有更新
+ */
+export async function checkAllSkillUpdates(
+  workspacePath?: string | null,
+  force = false
+): Promise<SkillUpdateSummary[]> {
+  return invoke<SkillUpdateSummary[]>('check_all_skill_updates', {
+    workspacePath: workspacePath ?? null,
+    force,
+  });
 }
 
 /**

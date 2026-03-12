@@ -63,6 +63,15 @@ export interface ConfigHealth {
   };
 }
 
+export interface NetworkCheckResult {
+  name: string;
+  url: string;
+  reachable: boolean;
+  latency: number | null;
+  detail: string | null;
+  statusCode: number | null;
+}
+
 /**
  * 统计卡片数据
  */

@@ -25,6 +25,8 @@ import {
   skillsLoadingAtom,
   skillsErrorAtom,
   skillsScopeAtom,
+  skillUpdatesAtom,
+  skillUpdatesCheckingAtom,
 } from '@/store/skillsAtoms';
 import {
   currentWorkspaceAtom,
@@ -35,7 +37,9 @@ import {
   scanRepoSkills,
   installSkillFromRepo,
   uninstallSkill,
+  updateSkill as updateSkillApi,
   parseGitAuthChallenge,
+  checkAllSkillUpdates,
 } from '@/services/skills';
 import type { ScannedSkillInfo, GitAuthChallenge, GitAuthInput } from '@/types/skills';
 
@@ -46,6 +50,8 @@ export default function SkillsList() {
   const [loading, setLoading] = useAtom(skillsLoadingAtom);
   const setError = useSetAtom(skillsErrorAtom);
   const [skillsScope, setSkillsScope] = useAtom(skillsScopeAtom);
+  const [skillUpdates, setSkillUpdates] = useAtom(skillUpdatesAtom);
+  const [checkingAllUpdates, setCheckingAllUpdates] = useAtom(skillUpdatesCheckingAtom);
   const currentWorkspace = useAtomValue(currentWorkspaceAtom);
 
   // 安装对话框状态
@@ -61,6 +67,7 @@ export default function SkillsList() {
   const [authDialogLoading, setAuthDialogLoading] = useState(false);
   const [authChallenge, setAuthChallenge] = useState<GitAuthChallenge | null>(null);
   const [authAction, setAuthAction] = useState<'scan' | 'install' | null>(null);
+  const [updatingSkillName, setUpdatingSkillName] = useState<string | null>(null);
 
   // 加载 Skills 数据
   const loadSkills = useCallback(async () => {
@@ -251,12 +258,61 @@ export default function SkillsList() {
     try {
       await uninstallSkill(skillName, currentWorkspace?.path ?? null);
       setSkills((prev) => prev.filter((s) => s.name !== skillName));
+      setSkillUpdates((prev) => {
+        const next = { ...prev };
+        delete next[skillName];
+        return next;
+      });
       toast.success(`Skill "${skillName}" 已删除`);
     } catch (err) {
       console.error('删除 Skill 失败:', err);
       toast.error('删除失败', { description: err instanceof Error ? err.message : '未知错误' });
     }
   };
+
+  const handleUpdateSkill = async (skillName: string) => {
+    setUpdatingSkillName(skillName);
+    try {
+      const result = await updateSkillApi(skillName, currentWorkspace?.path ?? null);
+      toast.success('更新成功', { description: result });
+      await loadSkills();
+      const results = await checkAllSkillUpdates(currentWorkspace?.path ?? null, true);
+      setSkillUpdates(Object.fromEntries(results.map((result) => [result.skillName, result])));
+    } catch (err) {
+      console.error('更新 Skill 失败:', err);
+      toast.error('更新失败', {
+        description: err instanceof Error ? err.message : '未知错误',
+      });
+    } finally {
+      setUpdatingSkillName(null);
+    }
+  };
+
+  const handleCheckAllUpdates = useCallback(async (silent = false) => {
+    if (checkingAllUpdates) return;
+
+    setCheckingAllUpdates(true);
+    try {
+      const results = await checkAllSkillUpdates(currentWorkspace?.path ?? null, !silent);
+      setSkillUpdates(Object.fromEntries(results.map((result) => [result.skillName, result])));
+
+      if (!silent) {
+        const updatableCount = results.filter((result) => result.hasUpdate).length;
+        toast.success('检查完成', {
+          description: updatableCount > 0 ? `发现 ${updatableCount} 个存在远程变更的 Skill` : '所有 Skill 都没有检测到远程变更',
+        });
+      }
+    } catch (err) {
+      console.error('批量检查更新失败:', err);
+      if (!silent) {
+        toast.error('检查更新失败', {
+          description: err instanceof Error ? err.message : '未知错误',
+        });
+      }
+    } finally {
+      setCheckingAllUpdates(false);
+    }
+  }, [checkingAllUpdates, currentWorkspace, setCheckingAllUpdates, setSkillUpdates]);
 
 
   const toolFilters = [
@@ -267,6 +323,18 @@ export default function SkillsList() {
     { value: 'opencode', label: 'OpenCode', icon: '🌟' },
     { value: 'antigravity', label: 'Antigravity', icon: '🚀' },
   ] as const;
+
+  const updatableCount = Object.values(skillUpdates).filter((result) => result.hasUpdate).length;
+  const allSkillsChecked = skills.length > 0 && skills.every((skill) => Boolean(skillUpdates[skill.name]));
+
+  useEffect(() => {
+    setSkillUpdates({});
+  }, [currentWorkspace, setSkillUpdates]);
+
+  useEffect(() => {
+    if (loading || skills.length === 0 || allSkillsChecked) return;
+    handleCheckAllUpdates(true);
+  }, [skills, loading, allSkillsChecked, handleCheckAllUpdates]);
 
   return (
     <div className="space-y-6">
@@ -285,6 +353,11 @@ export default function SkillsList() {
                   ? '管理全局已安装的 Skills'
                   : `管理 ${currentWorkspace?.name} 工作区的 Skills`}
               </p>
+              {updatableCount > 0 && (
+                <p className="mt-2 text-sm text-amber-600 dark:text-amber-400">
+                  发现 {updatableCount} 个 Skill 可更新
+                </p>
+              )}
             </div>
             <div className="flex flex-wrap gap-2">
               <Dialog open={installDialogOpen} onOpenChange={setInstallDialogOpen}>
@@ -527,6 +600,16 @@ export default function SkillsList() {
                 <RefreshCw className={`mr-2 h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
                 刷新
               </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => handleCheckAllUpdates(false)}
+                disabled={checkingAllUpdates || loading || skills.length === 0}
+                className="h-11 px-4"
+              >
+                <RefreshCw className={`mr-2 h-4 w-4 ${checkingAllUpdates ? 'animate-spin' : ''}`} />
+                检查更新
+              </Button>
             </div>
             </div>
           </div>
@@ -546,6 +629,11 @@ export default function SkillsList() {
               <Button variant="outline" className="h-11">
                 <Filter className="mr-2 h-4 w-4" />
                 过滤
+                {filter.updateOnly && (
+                  <Badge variant="secondary" className="ml-2">
+                    仅更新
+                  </Badge>
+                )}
               </Button>
             </DialogTrigger>
             <DialogContent>
@@ -574,6 +662,20 @@ export default function SkillsList() {
                     ))}
                   </div>
                 </div>
+                <div className="flex items-center justify-between rounded-lg border p-3">
+                  <div>
+                    <p className="text-sm font-medium">仅看可更新</p>
+                    <p className="text-xs text-muted-foreground">
+                      只显示检测到远程内容变更的 Skills
+                    </p>
+                  </div>
+                  <Checkbox
+                    checked={Boolean(filter.updateOnly)}
+                    onCheckedChange={(checked) =>
+                      setFilter({ ...filter, updateOnly: checked === true })
+                    }
+                  />
+                </div>
               </div>
             </DialogContent>
           </Dialog>
@@ -601,7 +703,9 @@ export default function SkillsList() {
           <p className="mt-2 text-sm text-muted-foreground">
             {skills.length === 0
               ? '还没有安装任何 Skills，请在 ~/.claude/skills 目录下添加'
-              : '尝试调整搜索条件或过滤器'}
+              : filter.updateOnly
+                ? '当前没有检测到可更新的 Skills'
+                : '尝试调整搜索条件或过滤器'}
           </p>
         </div>
       ) : (
@@ -610,8 +714,11 @@ export default function SkillsList() {
             <SkillCard
               key={skill.id}
               skill={skill}
+              updateInfo={skillUpdates[skill.name]}
+              updating={updatingSkillName === skill.name}
               onToggle={(enabled) => handleToggleSkill(skill.id, enabled)}
               onDelete={() => handleDeleteSkill(skill.name)}
+              onUpdate={() => handleUpdateSkill(skill.name)}
             />
           ))}
         </div>
