@@ -43,6 +43,7 @@ import {
   updateSkill as updateSkillApi,
   parseGitAuthChallenge,
   checkAllSkillUpdates,
+  checkSkillUpdate,
 } from '@/services/skills';
 import type { ScannedSkillInfo, GitAuthChallenge, GitAuthInput } from '@/types/skills';
 import type { AiToolType } from '@/types/skills';
@@ -289,6 +290,7 @@ export default function SkillsList() {
       const result = await updateSkillApi(skillName, currentWorkspace?.path ?? null);
       toast.success('更新成功', { description: result });
       const nextSkills = await loadSkills();
+      const recheck = await checkSkillUpdate(skillName, currentWorkspace?.path ?? null);
       const checkedAt = new Date().toISOString();
       setSkillUpdates((prev) => {
         const nextUpdates = {
@@ -296,16 +298,16 @@ export default function SkillsList() {
           [skillName]: {
             skillName,
             checkedAt,
-            hasUpdate: false,
-            hasRepository: true,
-            hasManifest: true,
-            currentVersion: undefined,
-            latestVersion: undefined,
-            changedFiles: [],
-            newFiles: [],
-            removedFiles: [],
-            outdatedTools: [],
-            error: undefined,
+            hasUpdate: recheck.hasUpdate,
+            hasRepository: recheck.hasRepository,
+            hasManifest: recheck.hasManifest,
+            currentVersion: recheck.currentVersion,
+            latestVersion: recheck.latestVersion,
+            changedFiles: recheck.changedFiles ?? [],
+            newFiles: recheck.newFiles ?? [],
+            removedFiles: recheck.removedFiles ?? [],
+            outdatedTools: recheck.outdatedTools ?? [],
+            error: recheck.error,
           },
         };
         setSkillsOrder(buildSkillsOrder(nextSkills, nextUpdates));
