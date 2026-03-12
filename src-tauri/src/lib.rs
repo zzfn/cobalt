@@ -11,7 +11,7 @@ use commands::{
     write_api_profiles, write_claude_json, write_claude_md, write_settings,
     // Skills 命令
     check_all_skill_updates, check_skill_update, create_skill, install_skill_from_repo, list_installed_skills,
-    list_skill_files, read_skill_file, read_skill_md, read_skill_registry, scan_repo_skills,
+    list_skill_files, open_skill_folder, read_skill_file, read_skill_md, read_skill_registry, scan_repo_skills,
     set_skill_repository, toggle_skill, uninstall_skill, update_skill, write_skill_registry,
     apply_skill_to_tools, remove_skill_from_tools, get_supported_ai_tools,
     // Skill 市场命令
@@ -113,6 +113,7 @@ pub fn run() {
             toggle_skill,
             uninstall_skill,
             list_installed_skills,
+            open_skill_folder,
             scan_repo_skills,
             install_skill_from_repo,
             create_skill,

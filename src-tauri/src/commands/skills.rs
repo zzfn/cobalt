@@ -277,6 +277,96 @@ fn get_cobalt_dir() -> Result<PathBuf, String> {
         .ok_or_else(|| "无法获取用户主目录".to_string())
 }
 
+pub fn get_disabled_skills_dir(workspace_path: Option<&str>) -> Result<PathBuf, String> {
+    if let Some(ws_path) = workspace_path {
+        Ok(PathBuf::from(ws_path).join(".cobalt").join("skills").join("disabled"))
+    } else {
+        Ok(get_cobalt_dir()?.join("skills").join("disabled"))
+    }
+}
+
+pub fn get_legacy_disabled_skills_dir(workspace_path: Option<&str>) -> Result<PathBuf, String> {
+    if let Some(ws_path) = workspace_path {
+        Ok(PathBuf::from(ws_path).join(".claude").join(".disabled_skills"))
+    } else {
+        Ok(get_claude_dir()?.join(".disabled_skills"))
+    }
+}
+
+fn get_disabled_skills_dir_candidates(workspace_path: Option<&str>) -> Result<Vec<PathBuf>, String> {
+    Ok(vec![
+        get_disabled_skills_dir(workspace_path)?,
+        get_legacy_disabled_skills_dir(workspace_path)?,
+    ])
+}
+
+fn find_existing_disabled_skill_dir(
+    skill_name: &str,
+    workspace_path: Option<&str>,
+) -> Result<Option<PathBuf>, String> {
+    for dir in get_disabled_skills_dir_candidates(workspace_path)? {
+        let candidate = dir.join(skill_name);
+        if candidate.exists() {
+            return Ok(Some(candidate));
+        }
+    }
+    Ok(None)
+}
+
+fn migrate_disabled_skills_dir(source_dir: &PathBuf, target_dir: &PathBuf) -> Result<(), String> {
+    if !source_dir.exists() {
+        return Ok(());
+    }
+
+    fs::create_dir_all(target_dir).map_err(|e| format!("创建禁用 skills 目录失败: {}", e))?;
+
+    let entries = fs::read_dir(source_dir).map_err(|e| format!("读取旧禁用 skills 目录失败: {}", e))?;
+
+    for entry in entries {
+        let entry = entry.map_err(|e| format!("读取旧禁用 skills 条目失败: {}", e))?;
+        let legacy_path = entry.path();
+
+        if !legacy_path.is_dir() {
+            continue;
+        }
+
+        let skill_name = entry.file_name();
+        let target_path = target_dir.join(&skill_name);
+
+        if target_path.exists() {
+            eprintln!("⚠️  [Backend] 跳过迁移已存在的禁用 Skill: {:?}", target_path);
+            continue;
+        }
+
+        match fs::rename(&legacy_path, &target_path) {
+            Ok(_) => {}
+            Err(_) => {
+                copy_dir_recursive(&legacy_path, &target_path)?;
+                fs::remove_dir_all(&legacy_path)
+                    .map_err(|e| format!("清理旧禁用 skills 目录失败: {}", e))?;
+            }
+        }
+    }
+
+    let is_empty = fs::read_dir(source_dir)
+        .map_err(|e| format!("读取旧禁用 skills 目录失败: {}", e))?
+        .next()
+        .is_none();
+
+    if is_empty {
+        fs::remove_dir(source_dir).map_err(|e| format!("删除旧禁用 skills 目录失败: {}", e))?;
+    }
+
+    Ok(())
+}
+
+fn migrate_legacy_disabled_skills_dir(workspace_path: Option<&str>) -> Result<(), String> {
+    let disabled_dir = get_disabled_skills_dir(workspace_path)?;
+    migrate_disabled_skills_dir(&get_legacy_disabled_skills_dir(workspace_path)?, &disabled_dir)?;
+
+    Ok(())
+}
+
 fn get_skill_updates_cache_dir() -> Result<PathBuf, String> {
     Ok(get_cobalt_dir()?.join(".cache").join("skill-updates"))
 }
@@ -341,6 +431,20 @@ fn get_all_tool_workspace_skills_dirs(workspace_path: &PathBuf) -> Vec<(&'static
     }
 
     dirs
+}
+
+fn get_tool_skill_dir(tool_name: &str, workspace_path: Option<&str>) -> Result<PathBuf, String> {
+    let all_tool_dirs = if let Some(ws_path) = workspace_path {
+        get_all_tool_workspace_skills_dirs(&PathBuf::from(ws_path))
+    } else {
+        get_all_tool_skills_dirs()
+    };
+
+    all_tool_dirs
+        .into_iter()
+        .find(|(name, _)| *name == tool_name)
+        .map(|(_, dir)| dir)
+        .ok_or_else(|| format!("未知的 AI 工具: {}", tool_name))
 }
 
 /// 根据工具名称列表获取对应的 skills 目录（全局）
@@ -513,6 +617,89 @@ pub struct SkillRegistry {
     pub skills: Vec<SkillRegistryEntry>,
 }
 
+#[derive(Debug, Serialize, Deserialize, Default)]
+#[serde(rename_all = "camelCase")]
+struct DisabledSkillState {
+    #[serde(default)]
+    installed_by: Vec<String>,
+    #[serde(default)]
+    disabled_at: Option<String>,
+}
+
+fn get_disabled_skill_state_path(skill_dir: &PathBuf) -> PathBuf {
+    skill_dir.join(".cobalt-state.json")
+}
+
+fn write_disabled_skill_state(skill_dir: &PathBuf, state: &DisabledSkillState) -> Result<(), String> {
+    let content = serde_json::to_string_pretty(state)
+        .map_err(|e| format!("序列化禁用状态失败: {}", e))?;
+    fs::write(get_disabled_skill_state_path(skill_dir), content)
+        .map_err(|e| format!("写入禁用状态失败: {}", e))
+}
+
+fn read_disabled_skill_state(skill_dir: &PathBuf) -> Result<DisabledSkillState, String> {
+    let state_path = get_disabled_skill_state_path(skill_dir);
+    if !state_path.exists() {
+        return Ok(DisabledSkillState::default());
+    }
+
+    let content = fs::read_to_string(&state_path)
+        .map_err(|e| format!("读取禁用状态失败: {}", e))?;
+    serde_json::from_str(&content)
+        .map_err(|e| format!("解析禁用状态失败: {}", e))
+}
+
+fn get_installed_tool_skill_paths(
+    skill_name: &str,
+    workspace_path: Option<&str>,
+) -> Vec<(String, PathBuf)> {
+    let all_tool_dirs = if let Some(ws_path) = workspace_path {
+        get_all_tool_workspace_skills_dirs(&PathBuf::from(ws_path))
+    } else {
+        get_all_tool_skills_dirs()
+    };
+
+    all_tool_dirs
+        .into_iter()
+        .filter_map(|(tool_name, tool_dir)| {
+            let skill_dir = tool_dir.join(skill_name);
+            if skill_dir.exists() {
+                Some((tool_name.to_string(), skill_dir))
+            } else {
+                None
+            }
+        })
+        .collect()
+}
+
+fn move_or_copy_skill_dir(source_dir: &PathBuf, target_dir: &PathBuf) -> Result<(), String> {
+    if let Some(parent) = target_dir.parent() {
+        fs::create_dir_all(parent).map_err(|e| format!("创建目录失败: {}", e))?;
+    }
+
+    match fs::rename(source_dir, target_dir) {
+        Ok(_) => Ok(()),
+        Err(_) => {
+            copy_dir_recursive(source_dir, target_dir)?;
+            fs::remove_dir_all(source_dir).map_err(|e| format!("清理源目录失败: {}", e))
+        }
+    }
+}
+
+fn update_registry_installation_state(
+    skill_name: &str,
+    enabled: bool,
+    installed_by: Vec<String>,
+) -> Result<(), String> {
+    let mut registry = read_skill_registry()?;
+    if let Some(entry) = registry.skills.iter_mut().find(|s| s.name == skill_name) {
+        entry.enabled = enabled;
+        entry.installed_by = installed_by;
+        write_skill_registry(registry)?;
+    }
+    Ok(())
+}
+
 /// 读取 skill-registry.json
 #[tauri::command]
 pub fn read_skill_registry() -> Result<SkillRegistry, String> {
@@ -563,17 +750,15 @@ pub struct SkillDetail {
 #[tauri::command]
 pub fn read_skill_md(skill_name: String, workspace_path: Option<String>) -> Result<SkillDetail, String> {
     let (skill_dir, enabled, found_in_tool) = if let Some(ref ws_path) = workspace_path {
-        // 工作区模式：在工作区的 .claude/skills 和 .claude/.disabled_skills 中查找
+        // 工作区模式：在工作区的 .claude/skills 和 .cobalt/skills/disabled 中查找
         let ws_path_buf = PathBuf::from(ws_path);
         let skills_dir = ws_path_buf.join(".claude").join("skills");
-        let disabled_skills_dir = ws_path_buf.join(".claude").join(".disabled_skills");
 
         let enabled_path = skills_dir.join(&skill_name);
-        let disabled_path = disabled_skills_dir.join(&skill_name);
 
         if enabled_path.exists() {
             (enabled_path, true, Some("claude-code".to_string()))
-        } else if disabled_path.exists() {
+        } else if let Some(disabled_path) = find_existing_disabled_skill_dir(&skill_name, Some(ws_path))? {
             (disabled_path, false, Some("claude-code".to_string()))
         } else {
             return Err(format!("Skill '{}' 不存在", skill_name));
@@ -581,15 +766,13 @@ pub fn read_skill_md(skill_name: String, workspace_path: Option<String>) -> Resu
     } else {
         // 全局模式：先在 claude 目录查找，再查找其他工具目录
         let skills_dir = get_skills_dir()?;
-        let disabled_skills_dir = get_claude_dir()?.join(".disabled_skills");
 
         let enabled_path = skills_dir.join(&skill_name);
-        let disabled_path = disabled_skills_dir.join(&skill_name);
 
         // 优先从 claude-code 目录查找
         if enabled_path.exists() {
             (enabled_path, true, Some("claude-code".to_string()))
-        } else if disabled_path.exists() {
+        } else if let Some(disabled_path) = find_existing_disabled_skill_dir(&skill_name, None)? {
             (disabled_path, false, Some("claude-code".to_string()))
         } else {
             // 在其他工具目录中查找
@@ -770,15 +953,11 @@ fn collect_files_recursive(
 #[tauri::command]
 pub fn list_skill_files(skill_name: String) -> Result<Vec<String>, String> {
     let skills_dir = get_skills_dir()?;
-    let disabled_skills_dir = get_claude_dir()?.join(".disabled_skills");
-
-    // 尝试从两个目录中查找
     let enabled_path = skills_dir.join(&skill_name);
-    let disabled_path = disabled_skills_dir.join(&skill_name);
 
     let skill_dir = if enabled_path.exists() {
         enabled_path
-    } else if disabled_path.exists() {
+    } else if let Some(disabled_path) = find_existing_disabled_skill_dir(&skill_name, None)? {
         disabled_path
     } else {
         return Err(format!("Skill '{}' 不存在", skill_name));
@@ -790,26 +969,19 @@ pub fn list_skill_files(skill_name: String) -> Result<Vec<String>, String> {
 /// 读取 Skill 中的指定文件内容
 #[tauri::command]
 pub fn read_skill_file(skill_name: String, file_path: String, workspace_path: Option<String>) -> Result<String, String> {
-    let (skills_dir, disabled_skills_dir) = if let Some(ref ws_path) = workspace_path {
+    let skills_dir = if let Some(ref ws_path) = workspace_path {
         let ws_path_buf = PathBuf::from(ws_path);
-        (
-            ws_path_buf.join(".claude").join("skills"),
-            ws_path_buf.join(".claude").join(".disabled_skills")
-        )
+        ws_path_buf.join(".claude").join("skills")
     } else {
-        (
-            get_skills_dir()?,
-            get_claude_dir()?.join(".disabled_skills")
-        )
+        get_skills_dir()?
     };
 
     // 尝试从两个目录中查找
     let enabled_path = skills_dir.join(&skill_name);
-    let disabled_path = disabled_skills_dir.join(&skill_name);
 
     let skill_dir = if enabled_path.exists() {
         enabled_path
-    } else if disabled_path.exists() {
+    } else if let Some(disabled_path) = find_existing_disabled_skill_dir(&skill_name, workspace_path.as_deref())? {
         disabled_path
     } else {
         return Err(format!("Skill '{}' 不存在", skill_name));
@@ -836,57 +1008,92 @@ pub fn read_skill_file(skill_name: String, file_path: String, workspace_path: Op
 /// 启用/禁用 Skill（通过移动文件实现）
 #[tauri::command]
 pub fn toggle_skill(skill_name: String, enabled: bool, workspace_path: Option<String>) -> Result<(), String> {
-    let (skills_dir, disabled_skills_dir) = if let Some(ref ws_path) = workspace_path {
-        let ws_path_buf = PathBuf::from(ws_path);
-        (
-            ws_path_buf.join(".claude").join("skills"),
-            ws_path_buf.join(".claude").join(".disabled_skills")
-        )
-    } else {
-        (
-            get_skills_dir()?,
-            get_claude_dir()?.join(".disabled_skills")
-        )
-    };
+    let disabled_skills_dir = get_disabled_skills_dir(workspace_path.as_deref())?;
 
     // 确保禁用目录存在
     fs::create_dir_all(&disabled_skills_dir)
-        .map_err(|e| format!("创建 .disabled_skills 目录失败: {}", e))?;
+        .map_err(|e| format!("创建禁用 skills 目录失败: {}", e))?;
 
-    let source_dir = if enabled {
-        // 启用：从 .disabled_skills 移动到 skills
-        disabled_skills_dir.join(&skill_name)
+    let target_dir = disabled_skills_dir.join(&skill_name);
+
+    if enabled {
+        let source_dir = find_existing_disabled_skill_dir(&skill_name, workspace_path.as_deref())?
+            .ok_or_else(|| format!("Skill '{}' 不存在于禁用 skills 目录", skill_name))?;
+        let state = read_disabled_skill_state(&source_dir)?;
+        let installed_tools = if state.installed_by.is_empty() {
+            vec!["claude-code".to_string()]
+        } else {
+            state.installed_by
+        };
+
+        let target_dirs = if let Some(ref ws_path) = workspace_path {
+            get_target_tool_workspace_dirs(&installed_tools, &PathBuf::from(ws_path))?
+        } else {
+            get_target_tool_dirs(&installed_tools)?
+        };
+
+        for (_, tool_dir) in &target_dirs {
+            let skill_dir = tool_dir.join(&skill_name);
+            if skill_dir.exists() {
+                return Err(format!("目标位置已存在 skill '{}'", skill_name));
+            }
+        }
+
+        for (_, tool_dir) in &target_dirs {
+            let skill_dir = tool_dir.join(&skill_name);
+            copy_dir_recursive(&source_dir, &skill_dir)?;
+        }
+
+        fs::remove_dir_all(&source_dir)
+            .map_err(|e| format!("清理禁用目录失败: {}", e))?;
+
+        if workspace_path.is_none() {
+            update_registry_installation_state(&skill_name, true, installed_tools)?;
+        }
     } else {
-        // 禁用：从 skills 移动到 .disabled_skills
-        skills_dir.join(&skill_name)
-    };
+        if target_dir.exists() {
+            return Err(format!("目标位置已存在 skill '{}'", skill_name));
+        }
 
-    let target_dir = if enabled {
-        skills_dir.join(&skill_name)
-    } else {
-        disabled_skills_dir.join(&skill_name)
-    };
+        let installed_tool_paths = get_installed_tool_skill_paths(&skill_name, workspace_path.as_deref());
+        if installed_tool_paths.is_empty() {
+            return Err(format!("Skill '{}' 不存在于任何工具目录", skill_name));
+        }
 
-    // 检查源目录是否存在
-    if !source_dir.exists() {
-        return Err(format!(
-            "Skill '{}' 不存在于 {} 目录",
-            skill_name,
-            if enabled { ".disabled_skills" } else { "skills" }
-        ));
+        let installed_tools = installed_tool_paths
+            .iter()
+            .map(|(tool_name, _)| tool_name.clone())
+            .collect::<Vec<_>>();
+
+        let source_dir = installed_tool_paths
+            .iter()
+            .find(|(tool_name, _)| tool_name == "claude-code")
+            .map(|(_, path)| path.clone())
+            .unwrap_or_else(|| installed_tool_paths[0].1.clone());
+
+        move_or_copy_skill_dir(&source_dir, &target_dir)?;
+        write_disabled_skill_state(
+            &target_dir,
+            &DisabledSkillState {
+                installed_by: installed_tools.clone(),
+                disabled_at: Some(chrono::Utc::now().to_rfc3339()),
+            },
+        )?;
+
+        for (_, tool_path) in installed_tool_paths {
+            if tool_path == source_dir {
+                continue;
+            }
+            if tool_path.exists() {
+                fs::remove_dir_all(&tool_path)
+                    .map_err(|e| format!("移除已安装目录失败: {}", e))?;
+            }
+        }
+
+        if workspace_path.is_none() {
+            update_registry_installation_state(&skill_name, false, Vec::new())?;
+        }
     }
-
-    // 检查目标目录是否已存在
-    if target_dir.exists() {
-        return Err(format!(
-            "目标位置已存在 skill '{}'",
-            skill_name
-        ));
-    }
-
-    // 移动目录
-    fs::rename(&source_dir, &target_dir)
-        .map_err(|e| format!("移动 skill 目录失败: {}", e))?;
 
     Ok(())
 }
@@ -923,16 +1130,13 @@ pub fn uninstall_skill(skill_name: String, workspace_path: Option<String>) -> Re
     }
 
     // 也检查 disabled_skills 目录
-    let disabled_skills_dir = if let Some(ref ws_path) = workspace_path {
-        PathBuf::from(ws_path).join(".claude").join(".disabled_skills")
-    } else {
-        get_claude_dir()?.join(".disabled_skills")
-    };
-    let disabled_path = disabled_skills_dir.join(&skill_name);
-    if disabled_path.exists() {
-        fs::remove_dir_all(&disabled_path)
-            .map_err(|e| format!("删除禁用的 skill 目录失败: {}", e))?;
-        deleted_from_tools.push("disabled".to_string());
+    for disabled_dir in get_disabled_skills_dir_candidates(workspace_path.as_deref())? {
+        let disabled_path = disabled_dir.join(&skill_name);
+        if disabled_path.exists() {
+            fs::remove_dir_all(&disabled_path)
+                .map_err(|e| format!("删除禁用的 skill 目录失败: {}", e))?;
+            deleted_from_tools.push("disabled".to_string());
+        }
     }
 
     if deleted_from_tools.is_empty() {
@@ -1036,19 +1240,21 @@ pub fn remove_skill_from_tools(
 /// workspace_path: 可选的工作区路径，如果提供则扫描工作区的各 AI Tool skills 目录
 #[tauri::command]
 pub fn list_installed_skills(workspace_path: Option<String>) -> Result<Vec<SkillRegistryEntry>, String> {
+    migrate_legacy_disabled_skills_dir(workspace_path.as_deref())?;
+
     // 根据是否提供工作区路径决定扫描目录
     let (skills_dir, disabled_skills_dir, tool_dirs) = if let Some(ref ws_path) = workspace_path {
         let ws_path_buf = PathBuf::from(ws_path);
         // 工作区模式下，默认使用 .claude/skills 作为主目录（兼容原有逻辑）
         let ws_skills_dir = ws_path_buf.join(".claude").join("skills");
-        let ws_disabled_dir = ws_path_buf.join(".claude").join(".disabled_skills");
+        let ws_disabled_dir = get_disabled_skills_dir(Some(ws_path))?;
         // 获取所有 AI Tools 的工作区级别目录
         let ws_tool_dirs = get_all_tool_workspace_skills_dirs(&ws_path_buf);
         println!("📁 [Backend] 扫描工作区 skills: {:?}", ws_skills_dir);
         (ws_skills_dir, ws_disabled_dir, ws_tool_dirs)
     } else {
         let global_skills_dir = get_skills_dir()?;
-        let global_disabled_dir = get_claude_dir()?.join(".disabled_skills");
+        let global_disabled_dir = get_disabled_skills_dir(None)?;
         let global_tool_dirs = get_all_tool_skills_dirs();
         println!("🌐 [Backend] 扫描全局 skills: {:?}", global_skills_dir);
         (global_skills_dir, global_disabled_dir, global_tool_dirs)
@@ -1142,7 +1348,7 @@ pub fn list_installed_skills(workspace_path: Option<String>) -> Result<Vec<Skill
     // 扫描禁用的 skills 目录
     if disabled_skills_dir.exists() {
         let entries = fs::read_dir(&disabled_skills_dir)
-            .map_err(|e| format!("读取 .disabled_skills 目录失败: {}", e))?;
+            .map_err(|e| format!("读取禁用 skills 目录失败: {}", e))?;
 
         for entry in entries {
             if let Ok(entry) = entry {
@@ -1162,7 +1368,7 @@ pub fn list_installed_skills(workspace_path: Option<String>) -> Result<Vec<Skill
 
                         if let Some(entry) = existing {
                             let mut skill_entry = entry.clone();
-                            skill_entry.enabled = false;  // 在 .disabled_skills/ 目录 = 禁用
+                            skill_entry.enabled = false;  // 在禁用 skills 目录 = 禁用
                             // 合并自动检测到的 tools（去重）
                             for tool in installed_by {
                                 if !skill_entry.installed_by.contains(&tool) {
@@ -1238,6 +1444,38 @@ pub fn list_installed_skills(workspace_path: Option<String>) -> Result<Vec<Skill
     Ok(skills)
 }
 
+#[tauri::command]
+pub fn open_skill_folder(
+    skill_name: String,
+    tool_name: String,
+    enabled: bool,
+    workspace_path: Option<String>,
+) -> Result<(), String> {
+    let skill_dir = if tool_name == "claude-code" && !enabled {
+        find_existing_disabled_skill_dir(&skill_name, workspace_path.as_deref())?
+            .ok_or_else(|| format!("未找到 Skill '{}' 的禁用目录", skill_name))?
+    } else {
+        get_tool_skill_dir(&tool_name, workspace_path.as_deref())?.join(&skill_name)
+    };
+
+    if !skill_dir.exists() {
+        return Err(format!("未找到 {} 中的 Skill '{}'", tool_name, skill_name));
+    }
+
+    #[cfg(target_os = "macos")]
+    let status = Command::new("open").arg(&skill_dir).status();
+
+    #[cfg(target_os = "windows")]
+    let status = Command::new("explorer").arg(&skill_dir).status();
+
+    #[cfg(all(unix, not(target_os = "macos")))]
+    let status = Command::new("xdg-open").arg(&skill_dir).status();
+
+    status.map_err(|e| format!("打开 Skill 目录失败: {}", e))?;
+
+    Ok(())
+}
+
 /// 扫描仓库中的 Skills 信息（不安装）
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -1300,7 +1538,7 @@ pub async fn scan_repo_skills(repo_url: String, git_auth: Option<GitAuthInput>) 
 fn scan_skills_in_directory(source_dir: &PathBuf) -> Result<Vec<ScannedSkillInfo>, String> {
     let mut skills = Vec::new();
     let skills_dir = get_skills_dir()?;
-    let disabled_skills_dir = get_claude_dir()?.join(".disabled_skills");
+    let disabled_skills_dir = get_disabled_skills_dir(None)?;
 
     // 检查是否是单个 skill（包含 SKILL.md）
     let skill_md = source_dir.join("SKILL.md");
@@ -1317,7 +1555,8 @@ fn scan_skills_in_directory(source_dir: &PathBuf) -> Result<Vec<ScannedSkillInfo
 
         // 检查是否已安装
         let already_installed = skills_dir.join(skill_name).exists()
-            || disabled_skills_dir.join(skill_name).exists();
+            || disabled_skills_dir.join(skill_name).exists()
+            || get_legacy_disabled_skills_dir(None)?.join(skill_name).exists();
 
         skills.push(ScannedSkillInfo {
             name: skill_name.to_string(),
@@ -1348,7 +1587,8 @@ fn scan_skills_in_directory(source_dir: &PathBuf) -> Result<Vec<ScannedSkillInfo
 
                         // 检查是否已安装
                         let already_installed = skills_dir.join(skill_name).exists()
-                            || disabled_skills_dir.join(skill_name).exists();
+                            || disabled_skills_dir.join(skill_name).exists()
+                            || get_legacy_disabled_skills_dir(None)?.join(skill_name).exists();
 
                         skills.push(ScannedSkillInfo {
                             name: skill_name.to_string(),
@@ -1674,8 +1914,8 @@ fn copy_dir_recursive(src: &PathBuf, dst: &PathBuf) -> Result<(), String> {
             let path = entry.path();
             let file_name = entry.file_name();
 
-            // 跳过 .git 目录
-            if file_name == ".git" {
+            // 跳过 git 元数据和本地禁用状态文件
+            if file_name == ".git" || file_name == ".cobalt-state.json" {
                 continue;
             }
 
@@ -2182,20 +2422,18 @@ fn resolve_local_skill_tool_dirs(
     skill_name: &str,
     workspace_path: Option<&str>,
 ) -> Result<Vec<(String, PathBuf)>, String> {
-    let (skills_dir, disabled_skills_dir, all_tool_dirs) = if let Some(ws_path) = workspace_path {
-        let ws_path_buf = PathBuf::from(ws_path);
-        (
-            ws_path_buf.join(".claude").join("skills"),
-            ws_path_buf.join(".claude").join(".disabled_skills"),
-            get_all_tool_workspace_skills_dirs(&ws_path_buf),
-        )
-    } else {
-        (
-            get_skills_dir()?,
-            get_claude_dir()?.join(".disabled_skills"),
-            get_all_tool_skills_dirs(),
-        )
-    };
+        let (skills_dir, all_tool_dirs) = if let Some(ws_path) = workspace_path {
+            let ws_path_buf = PathBuf::from(ws_path);
+            (
+                ws_path_buf.join(".claude").join("skills"),
+                get_all_tool_workspace_skills_dirs(&ws_path_buf),
+            )
+        } else {
+            (
+                get_skills_dir()?,
+                get_all_tool_skills_dirs(),
+            )
+        };
 
     let mut tool_paths = Vec::new();
     for (tool_name, tool_dir) in all_tool_dirs {
@@ -2206,8 +2444,7 @@ fn resolve_local_skill_tool_dirs(
     }
 
     if !tool_paths.iter().any(|(tool_name, _)| tool_name == "claude-code") {
-        let disabled_skill_dir = disabled_skills_dir.join(skill_name);
-        if disabled_skill_dir.exists() {
+        if let Some(disabled_skill_dir) = find_existing_disabled_skill_dir(skill_name, workspace_path)? {
             tool_paths.push(("claude-code".to_string(), disabled_skill_dir));
         } else if skills_dir.join(skill_name).exists() {
             tool_paths.push(("claude-code".to_string(), skills_dir.join(skill_name)));
@@ -2620,17 +2857,11 @@ fn compare_manifests(
 pub async fn update_skill(skill_name: String, workspace_path: Option<String>) -> Result<String, String> {
     println!("🔄 [Backend] 开始更新 Skill '{}'", skill_name);
 
-    let (skills_dir, disabled_skills_dir) = if let Some(ref ws_path) = workspace_path {
+    let skills_dir = if let Some(ref ws_path) = workspace_path {
         let ws_path_buf = PathBuf::from(ws_path);
-        (
-            ws_path_buf.join(".claude").join("skills"),
-            ws_path_buf.join(".claude").join(".disabled_skills")
-        )
+        ws_path_buf.join(".claude").join("skills")
     } else {
-        (
-            get_skills_dir()?,
-            get_claude_dir()?.join(".disabled_skills")
-        )
+        get_skills_dir()?
     };
 
     // 确定 skill 当前位置
@@ -2638,17 +2869,30 @@ pub async fn update_skill(skill_name: String, workspace_path: Option<String>) ->
     let skill_dir = if is_enabled {
         skills_dir.join(&skill_name)
     } else {
-        disabled_skills_dir.join(&skill_name)
+        find_existing_disabled_skill_dir(&skill_name, workspace_path.as_deref())?
+            .ok_or_else(|| format!("Skill '{}' 目录不存在", skill_name))?
     };
 
     if !skill_dir.exists() {
         return Err(format!("Skill '{}' 目录不存在", skill_name));
     }
 
+    let disabled_state = if is_enabled {
+        None
+    } else {
+        Some(read_disabled_skill_state(&skill_dir)?)
+    };
+
     let installed_tools = list_installed_skills(workspace_path.clone())?
         .into_iter()
         .find(|skill| skill.name == skill_name)
         .map(|skill| skill.installed_by)
+        .or_else(|| {
+            disabled_state
+                .as_ref()
+                .map(|state| state.installed_by.clone())
+                .filter(|tools| !tools.is_empty())
+        })
         .unwrap_or_else(|| vec!["claude-code".to_string()]);
 
     // 只在全局模式下读取注册表
@@ -2760,6 +3004,10 @@ pub async fn update_skill(skill_name: String, workspace_path: Option<String>) ->
         return Err(format!("复制新版本失败: {}", e));
     }
 
+    if let Some(ref state) = disabled_state {
+        write_disabled_skill_state(&skill_dir, state)?;
+    }
+
     // 生成新的清单文件
     let new_manifest = generate_skill_manifest(&skill_dir, Some(&repo_url))?;
     write_skill_manifest(&skill_dir, &new_manifest)?;
@@ -2775,6 +3023,9 @@ pub async fn update_skill(skill_name: String, workspace_path: Option<String>) ->
     let mut failed_tools = Vec::new();
 
     for tool_name in installed_tools {
+        if !is_enabled {
+            break;
+        }
         if tool_name == "claude-code" {
             continue;
         }
@@ -2808,6 +3059,10 @@ pub async fn update_skill(skill_name: String, workspace_path: Option<String>) ->
         let mut registry = read_skill_registry()?;
         if let Some(entry) = registry.skills.iter_mut().find(|s| s.name == skill_name) {
             // 更新已有条目
+            entry.enabled = is_enabled;
+            if !is_enabled {
+                entry.installed_by = Vec::new();
+            }
             if let Some(ref mut meta) = entry.metadata {
                 meta.version = Some(new_manifest.version.clone());
                 meta.repository = Some(repo_url.clone());
@@ -2820,7 +3075,7 @@ pub async fn update_skill(skill_name: String, workspace_path: Option<String>) ->
                 name: skill_name.clone(),
                 description: new_manifest.description.clone(),
                 enabled: is_enabled,
-                installed_by: vec!["claude-code".to_string()],
+                installed_by: if is_enabled { vec!["claude-code".to_string()] } else { Vec::new() },
                 installed_at: Some(now),
                 metadata: Some(SkillMetadata {
                     name: skill_name.clone(),
@@ -2860,24 +3115,18 @@ pub async fn update_skill(skill_name: String, workspace_path: Option<String>) ->
 pub fn set_skill_repository(skill_name: String, repository: String, workspace_path: Option<String>) -> Result<(), String> {
     println!("📝 [Backend] 设置 Skill '{}' 的仓库地址: {}", skill_name, repository);
 
-    let (skills_dir, disabled_skills_dir) = if let Some(ref ws_path) = workspace_path {
+    let skills_dir = if let Some(ref ws_path) = workspace_path {
         let ws_path_buf = PathBuf::from(ws_path);
-        (
-            ws_path_buf.join(".claude").join("skills"),
-            ws_path_buf.join(".claude").join(".disabled_skills")
-        )
+        ws_path_buf.join(".claude").join("skills")
     } else {
-        (
-            get_skills_dir()?,
-            get_claude_dir()?.join(".disabled_skills")
-        )
+        get_skills_dir()?
     };
 
     // 确定 skill 目录
     let skill_dir = if skills_dir.join(&skill_name).exists() {
         skills_dir.join(&skill_name)
-    } else if disabled_skills_dir.join(&skill_name).exists() {
-        disabled_skills_dir.join(&skill_name)
+    } else if let Some(disabled_dir) = find_existing_disabled_skill_dir(&skill_name, workspace_path.as_deref())? {
+        disabled_dir
     } else {
         return Err(format!("Skill '{}' 不存在", skill_name));
     };
@@ -2951,24 +3200,18 @@ pub fn apply_skill_to_tools(
     println!("📦 [Backend] Skill: {}", skill_name);
     println!("🎯 [Backend] 目标工具: {:?}", target_tools);
 
-    // 获取源 Skill 目录（从 claude-code 或 disabled_skills）
-    let (skills_dir, disabled_skills_dir) = if let Some(ref ws_path) = workspace_path {
+    // 获取源 Skill 目录（从 claude-code 或禁用 skills 目录）
+    let skills_dir = if let Some(ref ws_path) = workspace_path {
         let ws_path_buf = PathBuf::from(ws_path);
-        (
-            ws_path_buf.join(".claude").join("skills"),
-            ws_path_buf.join(".claude").join(".disabled_skills")
-        )
+        ws_path_buf.join(".claude").join("skills")
     } else {
-        (
-            get_skills_dir()?,
-            get_claude_dir()?.join(".disabled_skills")
-        )
+        get_skills_dir()?
     };
 
     let source_dir = if skills_dir.join(&skill_name).exists() {
         skills_dir.join(&skill_name)
-    } else if disabled_skills_dir.join(&skill_name).exists() {
-        disabled_skills_dir.join(&skill_name)
+    } else if let Some(disabled_dir) = find_existing_disabled_skill_dir(&skill_name, workspace_path.as_deref())? {
+        disabled_dir
     } else {
         return Err(format!("Skill '{}' 不存在", skill_name));
     };

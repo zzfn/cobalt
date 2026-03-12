@@ -479,11 +479,12 @@ pub async fn refresh_marketplace(
 
 /// 扫描市场源目录中的 Skills
 fn scan_marketplace_skills(source_dir: &PathBuf) -> Result<Vec<CachedSkillInfo>, String> {
-    use super::skills::{read_skill_registry, parse_skill_frontmatter};
+    use super::skills::{get_disabled_skills_dir, get_legacy_disabled_skills_dir, parse_skill_frontmatter, read_skill_registry};
 
     let mut skills = Vec::new();
     let skills_dir = get_skills_dir()?;
-    let disabled_skills_dir = get_claude_dir()?.join(".disabled_skills");
+    let disabled_skills_dir = get_disabled_skills_dir(None)?;
+    let legacy_disabled_skills_dir = get_legacy_disabled_skills_dir(None)?;
 
     // 读取已安装的 skills 注册表
     let registry = read_skill_registry().unwrap_or_default();
@@ -503,7 +504,8 @@ fn scan_marketplace_skills(source_dir: &PathBuf) -> Result<Vec<CachedSkillInfo>,
 
         // 检查是否已安装
         let installed = skills_dir.join(skill_name).exists()
-            || disabled_skills_dir.join(skill_name).exists();
+            || disabled_skills_dir.join(skill_name).exists()
+            || legacy_disabled_skills_dir.join(skill_name).exists();
 
         let installed_version = if installed {
             registry
@@ -556,7 +558,8 @@ fn scan_marketplace_skills(source_dir: &PathBuf) -> Result<Vec<CachedSkillInfo>,
 
                     // 检查是否已安装
                     let installed = skills_dir.join(skill_name).exists()
-                        || disabled_skills_dir.join(skill_name).exists();
+                        || disabled_skills_dir.join(skill_name).exists()
+                        || legacy_disabled_skills_dir.join(skill_name).exists();
 
                     let installed_version = if installed {
                         registry
@@ -627,13 +630,8 @@ pub fn get_marketplace_skills(source_id: String, workspace_path: Option<String>)
         get_global_tool_skill_dirs()?
     };
 
-    let disabled_skills_dir = if let Some(ref ws_path) = workspace_path {
-        PathBuf::from(ws_path).join(".claude").join(".disabled_skills")
-    } else {
-        dirs::home_dir()
-            .map(|home| home.join(".claude").join(".disabled_skills"))
-            .ok_or_else(|| "无法获取用户主目录".to_string())?
-    };
+    let disabled_skills_dir = super::skills::get_disabled_skills_dir(workspace_path.as_deref())?;
+    let legacy_disabled_skills_dir = super::skills::get_legacy_disabled_skills_dir(workspace_path.as_deref())?;
 
     // 更新每个 skill 的安装状态
     for skill in &mut cache.skills {
@@ -646,6 +644,11 @@ pub fn get_marketplace_skills(source_id: String, workspace_path: Option<String>)
             let disabled_path = disabled_skills_dir.join(&skill.name);
             if disabled_path.exists() {
                 installed_path = Some(disabled_path);
+            } else {
+                let legacy_disabled_path = legacy_disabled_skills_dir.join(&skill.name);
+                if legacy_disabled_path.exists() {
+                    installed_path = Some(legacy_disabled_path);
+                }
             }
         }
 

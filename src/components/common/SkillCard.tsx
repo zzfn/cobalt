@@ -17,7 +17,7 @@ import {
   AlertDialogTrigger,
 } from '@/components/ui/alert-dialog';
 import { cn, toBrowsableRepoUrl } from '@/lib/utils';
-import type { SkillRegistryEntry, SkillUpdateSummary } from '@/types/skills';
+import type { AiToolType, SkillRegistryEntry, SkillUpdateSummary } from '@/types/skills';
 import { AI_TOOL_META } from '@/types/skills';
 
 interface SkillCardProps {
@@ -27,10 +27,11 @@ interface SkillCardProps {
   onToggle?: (enabled: boolean) => void;
   onDelete?: () => void;
   onUpdate?: () => void;
+  onOpenInstalledTool?: (tool: AiToolType) => void;
   className?: string;
 }
 
-export default function SkillCard({ skill, updateInfo, updating = false, onToggle, onDelete, onUpdate, className }: SkillCardProps) {
+export default function SkillCard({ skill, updateInfo, updating = false, onToggle, onDelete, onUpdate, onOpenInstalledTool, className }: SkillCardProps) {
   const isCobaltManaged = Boolean(
     skill.metadata.sourceId ||
     skill.metadata.repository ||
@@ -121,12 +122,18 @@ export default function SkillCard({ skill, updateInfo, updating = false, onToggl
                 {skill.installedBy.map((tool) => {
                   const toolMeta = AI_TOOL_META[tool as keyof typeof AI_TOOL_META];
                   return (
-                    <span
+                    <button
+                      type="button"
                       key={tool}
-                      className="inline-flex items-center gap-1 rounded-full border border-border/70 bg-background px-2 py-0.5 text-[11px] text-foreground/90"
+                      className="inline-flex cursor-pointer items-center gap-1 rounded-full border border-border/70 bg-background px-2 py-0.5 text-[11px] text-foreground/90 transition-all hover:-translate-y-0.5 hover:border-primary/40 hover:text-foreground"
+                      onClick={(e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        onOpenInstalledTool?.(tool);
+                      }}
                     >
                       <span>{toolMeta?.displayName ?? tool}</span>
-                    </span>
+                    </button>
                   );
                 })}
               </div>

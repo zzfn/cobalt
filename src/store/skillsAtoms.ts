@@ -39,14 +39,64 @@ export const skillsScopeAtom = atom<WorkspaceScope>('global');
 // Skill 更新状态
 export const skillUpdatesAtom = atom<Record<string, SkillUpdateSummary>>({});
 
+// Skills 当前展示顺序。只在显式重算时更新，避免交互时立即跳位。
+export const skillsOrderAtom = atom<Record<string, number>>({});
+
 // 批量检查更新状态
 export const skillUpdatesCheckingAtom = atom<boolean>(false);
+
+export function compareSkillsForDisplay(
+  a: SkillRegistryEntry,
+  b: SkillRegistryEntry,
+  skillUpdates: Record<string, SkillUpdateSummary>,
+  sortBy: SkillSortOption,
+  sortOrder: 'asc' | 'desc'
+) {
+  if (a.enabled !== b.enabled) {
+    return a.enabled ? -1 : 1;
+  }
+
+  const aHasUpdate = Boolean(skillUpdates[a.name]?.hasUpdate);
+  const bHasUpdate = Boolean(skillUpdates[b.name]?.hasUpdate);
+  if (aHasUpdate !== bHasUpdate) {
+    return aHasUpdate ? -1 : 1;
+  }
+
+  let comparison = 0;
+  switch (sortBy) {
+    case 'name':
+      comparison = a.name.localeCompare(b.name);
+      break;
+    case 'updatedAt':
+      comparison = (a.metadata.updatedAt || '').localeCompare(b.metadata.updatedAt || '');
+      break;
+    case 'createdAt':
+      comparison = (a.metadata.createdAt || '').localeCompare(b.metadata.createdAt || '');
+      break;
+  }
+
+  return sortOrder === 'asc' ? comparison : -comparison;
+}
+
+export function buildSkillsOrder(
+  skills: SkillRegistryEntry[],
+  skillUpdates: Record<string, SkillUpdateSummary>,
+  sortBy: SkillSortOption = 'name',
+  sortOrder: 'asc' | 'desc' = 'asc'
+) {
+  return Object.fromEntries(
+    [...skills]
+      .sort((a, b) => compareSkillsForDisplay(a, b, skillUpdates, sortBy, sortOrder))
+      .map((skill, index) => [skill.name, index])
+  );
+}
 
 // 派生 atom：过滤后的 Skills 列表
 export const filteredSkillsAtom = atom((get) => {
   const skills = get(skillsListAtom);
   const filter = get(skillsFilterAtom);
   const skillUpdates = get(skillUpdatesAtom);
+  const skillsOrder = get(skillsOrderAtom);
   const sortBy = get(skillsSortByAtom);
   const sortOrder = get(skillsSortOrderAtom);
 
@@ -88,19 +138,13 @@ export const filteredSkillsAtom = atom((get) => {
 
   // 排序
   filtered.sort((a, b) => {
-    let comparison = 0;
-    switch (sortBy) {
-      case 'name':
-        comparison = a.name.localeCompare(b.name);
-        break;
-      case 'updatedAt':
-        comparison = (a.metadata.updatedAt || '').localeCompare(b.metadata.updatedAt || '');
-        break;
-      case 'createdAt':
-        comparison = (a.metadata.createdAt || '').localeCompare(b.metadata.createdAt || '');
-        break;
+    const aOrder = skillsOrder[a.name];
+    const bOrder = skillsOrder[b.name];
+    if (aOrder !== undefined && bOrder !== undefined && aOrder !== bOrder) {
+      return aOrder - bOrder;
     }
-    return sortOrder === 'asc' ? comparison : -comparison;
+
+    return compareSkillsForDisplay(a, b, skillUpdates, sortBy, sortOrder);
   });
 
   return filtered;

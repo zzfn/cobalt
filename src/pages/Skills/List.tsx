@@ -27,12 +27,15 @@ import {
   skillsScopeAtom,
   skillUpdatesAtom,
   skillUpdatesCheckingAtom,
+  skillsOrderAtom,
+  buildSkillsOrder,
 } from '@/store/skillsAtoms';
 import {
   currentWorkspaceAtom,
 } from '@/store/workspaceAtoms';
 import {
   listInstalledSkills,
+  openSkillFolder,
   toggleSkill as toggleSkillApi,
   scanRepoSkills,
   installSkillFromRepo,
@@ -42,6 +45,7 @@ import {
   checkAllSkillUpdates,
 } from '@/services/skills';
 import type { ScannedSkillInfo, GitAuthChallenge, GitAuthInput } from '@/types/skills';
+import type { AiToolType } from '@/types/skills';
 
 export default function SkillsList() {
   const [skills, setSkills] = useAtom(skillsListAtom);
@@ -51,6 +55,7 @@ export default function SkillsList() {
   const setError = useSetAtom(skillsErrorAtom);
   const [skillsScope, setSkillsScope] = useAtom(skillsScopeAtom);
   const [skillUpdates, setSkillUpdates] = useAtom(skillUpdatesAtom);
+  const [, setSkillsOrder] = useAtom(skillsOrderAtom);
   const [checkingAllUpdates, setCheckingAllUpdates] = useAtom(skillUpdatesCheckingAtom);
   const currentWorkspace = useAtomValue(currentWorkspaceAtom);
 
@@ -78,6 +83,7 @@ export default function SkillsList() {
       const workspacePath = currentWorkspace?.path ?? null;
       const data = await listInstalledSkills(workspacePath);
       setSkills(data);
+      setSkillsOrder(buildSkillsOrder(data, skillUpdates));
       setSkillsScope(currentWorkspace ? 'project' : 'global');
     } catch (err) {
       const message = err instanceof Error ? err.message : '加载 Skills 失败';
@@ -86,7 +92,7 @@ export default function SkillsList() {
     } finally {
       setLoading(false);
     }
-  }, [currentWorkspace, setSkills, setLoading, setError, setSkillsScope]);
+  }, [currentWorkspace, setSkills, setLoading, setError, setSkillsOrder, setSkillsScope, skillUpdates]);
 
   // 初始加载
   useEffect(() => {
@@ -258,6 +264,11 @@ export default function SkillsList() {
     try {
       await uninstallSkill(skillName, currentWorkspace?.path ?? null);
       setSkills((prev) => prev.filter((s) => s.name !== skillName));
+      setSkillsOrder((prev) => {
+        const next = { ...prev };
+        delete next[skillName];
+        return next;
+      });
       setSkillUpdates((prev) => {
         const next = { ...prev };
         delete next[skillName];
@@ -277,7 +288,12 @@ export default function SkillsList() {
       toast.success('更新成功', { description: result });
       await loadSkills();
       const results = await checkAllSkillUpdates(currentWorkspace?.path ?? null, true);
-      setSkillUpdates(Object.fromEntries(results.map((result) => [result.skillName, result])));
+      const nextUpdates = Object.fromEntries(results.map((result) => [result.skillName, result]));
+      setSkillUpdates(nextUpdates);
+      setSkillsOrder(buildSkillsOrder(
+        await listInstalledSkills(currentWorkspace?.path ?? null),
+        nextUpdates
+      ));
     } catch (err) {
       console.error('更新 Skill 失败:', err);
       toast.error('更新失败', {
@@ -288,13 +304,25 @@ export default function SkillsList() {
     }
   };
 
+  const handleOpenInstalledTool = async (skillName: string, tool: AiToolType, enabled: boolean) => {
+    try {
+      await openSkillFolder(skillName, tool, enabled, currentWorkspace?.path ?? null);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : '打开目录失败';
+      console.error('打开 Skill 目录失败:', err);
+      toast.error('打开目录失败', { description: message });
+    }
+  };
+
   const handleCheckAllUpdates = useCallback(async (silent = false) => {
     if (checkingAllUpdates) return;
 
     setCheckingAllUpdates(true);
     try {
       const results = await checkAllSkillUpdates(currentWorkspace?.path ?? null, !silent);
-      setSkillUpdates(Object.fromEntries(results.map((result) => [result.skillName, result])));
+      const nextUpdates = Object.fromEntries(results.map((result) => [result.skillName, result]));
+      setSkillUpdates(nextUpdates);
+      setSkillsOrder(buildSkillsOrder(skills, nextUpdates));
 
       if (!silent) {
         const updatableCount = results.filter((result) => result.hasUpdate).length;
@@ -312,7 +340,7 @@ export default function SkillsList() {
     } finally {
       setCheckingAllUpdates(false);
     }
-  }, [checkingAllUpdates, currentWorkspace, setCheckingAllUpdates, setSkillUpdates]);
+  }, [checkingAllUpdates, currentWorkspace, setCheckingAllUpdates, setSkillUpdates, setSkillsOrder, skills]);
 
 
   const toolFilters = [
@@ -329,7 +357,8 @@ export default function SkillsList() {
 
   useEffect(() => {
     setSkillUpdates({});
-  }, [currentWorkspace, setSkillUpdates]);
+    setSkillsOrder({});
+  }, [currentWorkspace, setSkillUpdates, setSkillsOrder]);
 
   useEffect(() => {
     if (loading || skills.length === 0 || allSkillsChecked) return;
@@ -719,6 +748,7 @@ export default function SkillsList() {
               onToggle={(enabled) => handleToggleSkill(skill.id, enabled)}
               onDelete={() => handleDeleteSkill(skill.name)}
               onUpdate={() => handleUpdateSkill(skill.name)}
+              onOpenInstalledTool={(tool) => handleOpenInstalledTool(skill.name, tool, skill.enabled)}
             />
           ))}
         </div>

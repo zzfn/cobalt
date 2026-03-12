@@ -149,6 +149,20 @@ export async function listInstalledSkills(workspacePath?: string | null): Promis
   return skills.map(toSkillRegistryEntry);
 }
 
+export async function openSkillFolder(
+  skillName: string,
+  toolName: AiToolType,
+  enabled: boolean,
+  workspacePath?: string | null
+): Promise<void> {
+  await invoke('open_skill_folder', {
+    skillName,
+    toolName,
+    enabled,
+    workspacePath: workspacePath ?? null,
+  });
+}
+
 /**
  * 获取 Skill 详情
  */
