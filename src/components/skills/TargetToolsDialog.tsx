@@ -47,15 +47,17 @@ export function TargetToolsDialog({
   // 当对话框打开时，初始化选中的工具
   useEffect(() => {
     if (open) {
-      if (defaultTools.length > 0) {
-        // 如果有默认工具，使用默认工具
-        setSelectedTools(new Set(defaultTools));
+      // 只保留在 toolsInfo 中存在的有效 AI 工具 ID，过滤掉权限字符串等无效值
+      const validToolIds = new Set(toolsInfo.map(t => t.id));
+      const validDefaults = defaultTools.filter(t => validToolIds.has(t));
+      if (validDefaults.length > 0) {
+        setSelectedTools(new Set(validDefaults));
       } else {
         // 否则默认选中 claude-code
         setSelectedTools(new Set(['claude-code']));
       }
     }
-  }, [open, defaultTools]);
+  }, [open, defaultTools, toolsInfo]);
 
   const toggleTool = (toolId: string) => {
     const newSelected = new Set(selectedTools);
@@ -139,13 +141,16 @@ export function TargetToolsDialog({
                 ))}
               </div>
 
-              {defaultTools.length > 0 && (
+              {defaultTools.filter(t => toolsInfo.some(info => info.id === t)).length > 0 && (
                 <div className="flex items-start gap-2 rounded-[14px] border border-border/70 bg-muted/20 px-3 py-2 text-sm text-muted-foreground">
                   <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-foreground/65" />
                   <div className="min-w-0">
                     <p className="text-xs font-medium uppercase tracking-[0.16em] text-foreground/70">推荐目标</p>
                     <p className="mt-1 text-xs leading-5">
-                      {defaultTools.map(t => toolsInfo.find(info => info.id === t)?.displayName || t).join('、')}
+                      {defaultTools
+                        .map(t => toolsInfo.find(info => info.id === t)?.displayName)
+                        .filter(Boolean)
+                        .join('、')}
                     </p>
                   </div>
                 </div>

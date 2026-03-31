@@ -2088,12 +2088,14 @@ pub fn parse_skill_frontmatter(content: &str, default_name: &str) -> Option<Skil
         })
         .unwrap_or_default();
 
-    // 解析 allowed-tools 字段
-    let target_tools = yaml.get("allowed-tools")
+    // 解析 ai-tools 字段（指定该 Skill 适用于哪些 AI 工具，如 claude-code、cursor 等）
+    // 注意：allowed-tools 是 Claude Code 的权限配置字段，不是 AI 工具类型
+    let target_tools = yaml.get("ai-tools")
         .and_then(|v| v.as_str())
         .map(|s| {
             s.split(',')
                 .map(|t| t.trim().to_string())
+                .filter(|t| !t.is_empty())
                 .collect()
         })
         .unwrap_or_default();
