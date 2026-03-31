@@ -396,6 +396,7 @@ pub fn get_tool_relative_paths() -> Vec<(&'static str, &'static [&'static str])>
         ("codex", &[".codex", "skills"]),
         ("cursor", &[".cursor", "skills"]),
         ("droid", &[".factory", "skills"]),
+        ("copilot", &[".agents", "skills"]),
     ]
 }
 
@@ -543,6 +544,13 @@ pub fn get_supported_ai_tools() -> Vec<AiToolInfo> {
             display_name: "Droid".to_string(),
             icon: "🦾".to_string(),
             relative_path: ".factory/skills/".to_string(),
+        },
+        AiToolInfo {
+            id: "copilot".to_string(),
+            name: "copilot".to_string(),
+            display_name: "Copilot".to_string(),
+            icon: "🐙".to_string(),
+            relative_path: ".agents/skills/".to_string(),
         },
     ]
 }

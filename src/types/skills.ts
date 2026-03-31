@@ -3,7 +3,7 @@
 /**
  * 支持的 AI 工具类型
  */
-export type AiToolType = 'claude-code' | 'cursor' | 'codex' | 'opencode' | 'antigravity' | 'droid';
+export type AiToolType = 'claude-code' | 'cursor' | 'codex' | 'opencode' | 'antigravity' | 'droid' | 'copilot';
 
 /**
  * AI 工具元信息
@@ -65,6 +65,12 @@ export const AI_TOOL_META: Record<AiToolType, AiToolMeta> = {
     name: 'droid',
     displayName: 'Droid',
     icon: '🦾',
+  },
+  'copilot': {
+    id: 'copilot',
+    name: 'copilot',
+    displayName: 'Copilot',
+    icon: '🐙',
   },
 };
 
