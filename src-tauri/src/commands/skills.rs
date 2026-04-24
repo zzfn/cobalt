@@ -1650,8 +1650,8 @@ pub async fn scan_repo_skills(repo_url: String, git_auth: Option<GitAuthInput>) 
         temp_dir.clone()
     };
 
-    // 扫描 skills
-    let scanned_skills = scan_skills_in_directory(&source_dir)?;
+    // 扫描 skills（单技能仓库时用 repo_name 作为备选名称）
+    let scanned_skills = scan_skills_in_directory(&source_dir, Some(repo_name))?;
 
     // 清理临时目录
     if temp_dir.exists() {
@@ -1667,7 +1667,8 @@ pub async fn scan_repo_skills(repo_url: String, git_auth: Option<GitAuthInput>) 
 }
 
 /// 扫描目录中的 skills 信息
-fn scan_skills_in_directory(source_dir: &PathBuf) -> Result<Vec<ScannedSkillInfo>, String> {
+/// fallback_name: 单技能仓库时，当 SKILL.md 无 name 字段时用作备选（通常传 repo 名）
+fn scan_skills_in_directory(source_dir: &PathBuf, fallback_name: Option<&str>) -> Result<Vec<ScannedSkillInfo>, String> {
     let mut skills = Vec::new();
     let skills_dir = get_skills_dir()?;
     let disabled_skills_dir = get_disabled_skills_dir(None)?;
@@ -1676,22 +1677,29 @@ fn scan_skills_in_directory(source_dir: &PathBuf) -> Result<Vec<ScannedSkillInfo
     let skill_md = source_dir.join("SKILL.md");
     if skill_md.exists() {
         println!("📖 [Backend] 发现 SKILL.md，作为单个 skill");
-        let skill_name = source_dir
-            .file_name()
-            .and_then(|n| n.to_str())
-            .unwrap_or("skill");
 
-        // 读取 metadata
+        // 名称优先级: frontmatter name > fallback_name (repo 名) > 目录名
         let content = fs::read_to_string(&skill_md).ok();
-        let metadata = content.and_then(|c| parse_skill_frontmatter(&c, skill_name));
+        let mut metadata = content.as_deref().and_then(|c| parse_skill_frontmatter(c, ""));
+        let dir_name = source_dir.file_name().and_then(|n| n.to_str()).unwrap_or("skill");
+        let skill_name: String = metadata.as_ref()
+            .map(|m| m.name.trim())
+            .filter(|n| !n.is_empty())
+            .or(fallback_name)
+            .unwrap_or(dir_name)
+            .to_string();
+        // 保证 metadata.name 与最终解析出的名称一致
+        if let Some(ref mut m) = metadata {
+            m.name = skill_name.clone();
+        }
 
         // 检查是否已安装
-        let already_installed = skills_dir.join(skill_name).exists()
-            || disabled_skills_dir.join(skill_name).exists()
-            || get_legacy_disabled_skills_dir(None)?.join(skill_name).exists();
+        let already_installed = skills_dir.join(&skill_name).exists()
+            || disabled_skills_dir.join(&skill_name).exists()
+            || get_legacy_disabled_skills_dir(None)?.join(&skill_name).exists();
 
         skills.push(ScannedSkillInfo {
-            name: skill_name.to_string(),
+            name: skill_name,
             description: metadata.as_ref().and_then(|m| m.description.clone()),
             version: metadata.as_ref().and_then(|m| m.version.clone()),
             already_installed,
@@ -1823,8 +1831,8 @@ pub async fn install_skill_from_repo(
         temp_dir.clone()
     };
 
-    // 扫描并安装 skills
-    let installed_skills = install_skills_from_dir(&source_dir, &target_dirs, &repo_url, skill_names.as_ref())?;
+    // 扫描并安装 skills（单技能仓库时用 repo_name 作为备选名称）
+    let installed_skills = install_skills_from_dir(&source_dir, &target_dirs, &repo_url, skill_names.as_ref(), Some(repo_name))?;
 
     // 清理临时目录
     if temp_dir.exists() {
@@ -1840,11 +1848,13 @@ pub async fn install_skill_from_repo(
 }
 
 /// 从目录中扫描并安装 skills（支持选择性安装和多目标工具）
+/// fallback_name: 单技能仓库时，当 SKILL.md 无 name 字段时用作备选（通常传 repo 名）
 fn install_skills_from_dir(
     source_dir: &PathBuf,
     target_dirs: &Vec<(String, PathBuf)>,
     repo_url: &str,
     selected_skills: Option<&Vec<String>>,
+    fallback_name: Option<&str>,
 ) -> Result<Vec<String>, String> {
     let mut installed = Vec::new();
 
@@ -1852,21 +1862,28 @@ fn install_skills_from_dir(
     let skill_md = source_dir.join("SKILL.md");
     if skill_md.exists() {
         println!("📖 [Backend] 发现 SKILL.md，作为单个 skill 安装");
-        let skill_name = source_dir
-            .file_name()
-            .and_then(|n| n.to_str())
-            .unwrap_or("skill");
+
+        // 名称优先级: frontmatter name > fallback_name (repo 名) > 目录名
+        let content = fs::read_to_string(&skill_md).ok();
+        let metadata_raw = content.as_deref().and_then(|c| parse_skill_frontmatter(c, ""));
+        let dir_name = source_dir.file_name().and_then(|n| n.to_str()).unwrap_or("skill");
+        let skill_name: String = metadata_raw.as_ref()
+            .map(|m| m.name.trim())
+            .filter(|n| !n.is_empty())
+            .or(fallback_name)
+            .unwrap_or(dir_name)
+            .to_string();
 
         // 如果指定了要安装的 skills，检查是否包含当前 skill
         if let Some(selected) = selected_skills {
-            if !selected.contains(&skill_name.to_string()) {
+            if !selected.contains(&skill_name) {
                 println!("⏭️  [Backend] 跳过未选中的 skill: {}", skill_name);
                 return Ok(installed);
             }
         }
 
-        install_single_skill(source_dir, target_dirs, skill_name, repo_url)?;
-        installed.push(skill_name.to_string());
+        install_single_skill(source_dir, target_dirs, &skill_name, repo_url)?;
+        installed.push(skill_name);
         return Ok(installed);
     }
 
